@@ -37,8 +37,7 @@ def opt[T: Copyable & Movable & ImplicitlyDeletable,
     var r = p(inp)
     if r.ok:
         return r^
-    var out = ParseResult[T].success(default, inp)
-    return out^
+    return ParseResult[T].success(default, inp)^
 
 
 # ── many / many1 ─────────────────────────────────────────────────────────────
@@ -56,8 +55,7 @@ def many[T: Copyable & Movable & ImplicitlyDeletable,
             break
         results.append(r.get())
         cur = r.rest
-    var out = ParseResult[List[T]].success(results, cur)
-    return out^
+    return ParseResult[List[T]].success(results, cur)^
 
 
 @parameter
@@ -67,8 +65,7 @@ def many1[T: Copyable & Movable & ImplicitlyDeletable,
     """One-or-more applications of p.  Fails if zero matches."""
     var r0 = p(inp)
     if not r0.ok:
-        var out = ParseResult[List[T]].failure(inp, "many1: zero matches")
-        return out^
+        return ParseResult[List[T]].failure(inp, "many1: zero matches")^
     var results = List[T]()
     results.append(r0.get())
     var cur = r0.rest
@@ -78,8 +75,7 @@ def many1[T: Copyable & Movable & ImplicitlyDeletable,
             break
         results.append(r.get())
         cur = r.rest
-    var out = ParseResult[List[T]].success(results, cur)
-    return out^
+    return ParseResult[List[T]].success(results, cur)^
 
 
 # ── map ───────────────────────────────────────────────────────────────────────
@@ -92,11 +88,8 @@ def map[T: Copyable & Movable & ImplicitlyDeletable,
     """Apply f to the successful result of p."""
     var r = p(inp)
     if not r.ok:
-        var out = ParseResult[U].failure(r.rest, r.msg)
-        return out^
-    var val = f(r.get())
-    var out = ParseResult[U].success(val, r.rest)
-    return out^
+        return ParseResult[U].failure(r.rest, r.msg)^
+    return ParseResult[U].success(f(r.get()), r.rest)^
 
 
 # ── attempt ──────────────────────────────────────────────────────────────────
@@ -118,8 +111,7 @@ def attempt[T: Copyable & Movable & ImplicitlyDeletable,
     var r = p(inp)
     if not r.ok:
         # Overwrite rest with original position — guarantees no consumption.
-        var out = ParseResult[T].failure(inp, r.msg)
-        return out^
+        return ParseResult[T].failure(inp, r.msg)^
     return r^
 
 
@@ -133,8 +125,7 @@ def choice[T: Copyable & Movable & ImplicitlyDeletable,
     var r = p(inp)
     if r.ok:
         return r^
-    var r2 = q(inp)
-    return r2^
+    return q(inp)^
 
 
 # ── seq / skip_left / skip_right / between ────────────────────────────────────
@@ -147,15 +138,11 @@ def seq[A: Copyable & Movable & ImplicitlyDeletable,
     """Run p then q; return both results as a Pair."""
     var ra = p(inp)
     if not ra.ok:
-        var out = ParseResult[Pair[A, B]].failure(inp, ra.msg)
-        return out^
+        return ParseResult[Pair[A, B]].failure(inp, ra.msg)^
     var rb = q(ra.rest)
     if not rb.ok:
-        var out = ParseResult[Pair[A, B]].failure(inp, rb.msg)
-        return out^
-    var pair = Pair[A, B](ra.get(), rb.get())
-    var out = ParseResult[Pair[A, B]].success(pair, rb.rest)
-    return out^
+        return ParseResult[Pair[A, B]].failure(inp, rb.msg)^
+    return ParseResult[Pair[A, B]].success(Pair[A, B](ra.get(), rb.get()), rb.rest)^
 
 
 @parameter
@@ -166,10 +153,8 @@ def skip_left[A: Copyable & Movable & ImplicitlyDeletable,
     """Run p then q; discard p result, return q result."""
     var ra = p(inp)
     if not ra.ok:
-        var out = ParseResult[B].failure(inp, ra.msg)
-        return out^
-    var rb = q(ra.rest)
-    return rb^
+        return ParseResult[B].failure(inp, ra.msg)^
+    return q(ra.rest)^
 
 
 @parameter
@@ -180,14 +165,11 @@ def skip_right[A: Copyable & Movable & ImplicitlyDeletable,
     """Run p then q; discard q result, return p result."""
     var ra = p(inp)
     if not ra.ok:
-        var out = ParseResult[A].failure(inp, ra.msg)
-        return out^
+        return ParseResult[A].failure(inp, ra.msg)^
     var rb = q(ra.rest)
     if not rb.ok:
-        var out = ParseResult[A].failure(inp, rb.msg)
-        return out^
-    var out = ParseResult[A].success(ra.get(), rb.rest)
-    return out^
+        return ParseResult[A].failure(inp, rb.msg)^
+    return ParseResult[A].success(ra.get(), rb.rest)^
 
 
 @parameter
@@ -200,18 +182,14 @@ def between[L: Copyable & Movable & ImplicitlyDeletable,
     """Parse `lp p rp`, return p result (discard delimiters)."""
     var rl = lp(inp)
     if not rl.ok:
-        var out = ParseResult[T].failure(inp, rl.msg)
-        return out^
+        return ParseResult[T].failure(inp, rl.msg)^
     var rm = p(rl.rest)
     if not rm.ok:
-        var out = ParseResult[T].failure(inp, rm.msg)
-        return out^
+        return ParseResult[T].failure(inp, rm.msg)^
     var rr = rp(rm.rest)
     if not rr.ok:
-        var out = ParseResult[T].failure(inp, rr.msg)
-        return out^
-    var out = ParseResult[T].success(rm.get(), rr.rest)
-    return out^
+        return ParseResult[T].failure(inp, rr.msg)^
+    return ParseResult[T].success(rm.get(), rr.rest)^
 
 
 # ── sep_by / sep_by1 ─────────────────────────────────────────────────────────
@@ -225,8 +203,7 @@ def sep_by[T: Copyable & Movable & ImplicitlyDeletable,
     var results = List[T]()
     var r0 = p(inp)
     if not r0.ok:
-        var out = ParseResult[List[T]].success(results, inp)
-        return out^
+        return ParseResult[List[T]].success(results, inp)^
     results.append(r0.get())
     var cur = r0.rest
     while True:
@@ -238,8 +215,7 @@ def sep_by[T: Copyable & Movable & ImplicitlyDeletable,
             break
         results.append(rp.get())
         cur = rp.rest
-    var out = ParseResult[List[T]].success(results, cur)
-    return out^
+    return ParseResult[List[T]].success(results, cur)^
 
 
 @parameter
@@ -250,8 +226,7 @@ def sep_by1[T: Copyable & Movable & ImplicitlyDeletable,
     """One-or-more p separated by s.  Fails if zero matches."""
     var r0 = p(inp)
     if not r0.ok:
-        var out = ParseResult[List[T]].failure(inp, "sep_by1: no match")
-        return out^
+        return ParseResult[List[T]].failure(inp, "sep_by1: no match")^
     var results = List[T]()
     results.append(r0.get())
     var cur = r0.rest
@@ -264,8 +239,7 @@ def sep_by1[T: Copyable & Movable & ImplicitlyDeletable,
             break
         results.append(rp.get())
         cur = rp.rest
-    var out = ParseResult[List[T]].success(results, cur)
-    return out^
+    return ParseResult[List[T]].success(results, cur)^
 
 
 # ── peek / not_followed_by ────────────────────────────────────────────────────
@@ -276,10 +250,8 @@ def peek[T: Copyable & Movable & ImplicitlyDeletable,
     """Try p without consuming input.  Succeeds (returning p's value) if p succeeds."""
     var r = p(inp)
     if not r.ok:
-        var out = ParseResult[T].failure(inp, r.msg)
-        return out^
-    var out = ParseResult[T].success(r.get(), inp)
-    return out^
+        return ParseResult[T].failure(inp, r.msg)^
+    return ParseResult[T].success(r.get(), inp)^
 
 
 @parameter
@@ -288,10 +260,8 @@ def not_followed_by[T: Copyable & Movable & ImplicitlyDeletable,
     """Succeed (returning 0) only if p would FAIL at current position.  Consumes nothing."""
     var r = p(inp)
     if r.ok:
-        var out = ParseResult[UInt8].failure(inp, "not_followed_by: unexpected match")
-        return out^
-    var out = ParseResult[UInt8].success(0, inp)
-    return out^
+        return ParseResult[UInt8].failure(inp, "not_followed_by: unexpected match")^
+    return ParseResult[UInt8].success(0, inp)^
 
 
 # ── verify ────────────────────────────────────────────────────────────────────
@@ -303,11 +273,9 @@ def verify[T: Copyable & Movable & ImplicitlyDeletable,
     """Run p, then apply pred to the value.  Fails if pred returns False."""
     var r = p(inp)
     if not r.ok:
-        var out = ParseResult[T].failure(inp, r.msg)
-        return out^
+        return ParseResult[T].failure(inp, r.msg)^
     if not pred(r.get()):
-        var out = ParseResult[T].failure(inp, "verify: predicate failed")
-        return out^
+        return ParseResult[T].failure(inp, "verify: predicate failed")^
     return r^
 
 
@@ -323,8 +291,7 @@ def skip_many[T: Copyable & Movable & ImplicitlyDeletable,
         if not r.ok:
             break
         cur = r.rest
-    var out = ParseResult[UInt8].success(0, cur)
-    return out^
+    return ParseResult[UInt8].success(0, cur)^
 
 
 @parameter
@@ -333,16 +300,14 @@ def skip_many1[T: Copyable & Movable & ImplicitlyDeletable,
     """One-or-more applications of p, discarding all results.  Fails if zero matches."""
     var r0 = p(inp)
     if not r0.ok:
-        var out = ParseResult[UInt8].failure(inp, "skip_many1: zero matches")
-        return out^
+        return ParseResult[UInt8].failure(inp, "skip_many1: zero matches")^
     var cur = r0.rest
     while True:
         var r = p(cur)
         if not r.ok:
             break
         cur = r.rest
-    var out = ParseResult[UInt8].success(0, cur)
-    return out^
+    return ParseResult[UInt8].success(0, cur)^
 
 
 # ── count ─────────────────────────────────────────────────────────────────────
@@ -357,12 +322,10 @@ def count[T: Copyable & Movable & ImplicitlyDeletable,
     for _ in range(N):
         var r = p(cur)
         if not r.ok:
-            var out = ParseResult[List[T]].failure(inp, "count: not enough matches")
-            return out^
+            return ParseResult[List[T]].failure(inp, "count: not enough matches")^
         results.append(r.get())
         cur = r.rest
-    var out = ParseResult[List[T]].success(results, cur)
-    return out^
+    return ParseResult[List[T]].success(results, cur)^
 
 
 # ── recognize ─────────────────────────────────────────────────────────────────
@@ -374,7 +337,5 @@ def recognize[T: Copyable & Movable & ImplicitlyDeletable,
     var start = inp.pos
     var r = p(inp)
     if not r.ok:
-        var out = ParseResult[String].failure(inp, r.msg)
-        return out^
-    var out = ParseResult[String].success(inp.slice_str(start, r.rest.pos), r.rest)
-    return out^
+        return ParseResult[String].failure(inp, r.msg)^
+    return ParseResult[String].success(inp.slice_str(start, r.rest.pos), r.rest)^

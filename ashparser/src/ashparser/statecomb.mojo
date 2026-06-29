@@ -34,10 +34,8 @@ def slift[T: Copyable & IC & Movable & ImplicitlyDeletable,
     """Promote a stateless parser into a stateful one.  State passes through."""
     var r = p(ctx.input)
     if not r.ok:
-        var out = CtxResult[T, S].failure(ctx, r.msg)
-        return out^
-    var out = CtxResult[T, S].success(r.get(), Ctx[S](r.rest, ctx.state))
-    return out^
+        return CtxResult[T, S].failure(ctx, r.msg)^
+    return CtxResult[T, S].success(r.get(), Ctx[S](r.rest, ctx.state))^
 
 
 # ── sget / smodify ────────────────────────────────────────────────────────────
@@ -46,8 +44,7 @@ def slift[T: Copyable & IC & Movable & ImplicitlyDeletable,
 def sget[S: Copyable & IC & Movable & ImplicitlyDeletable](
     ctx: Ctx[S]) -> CtxResult[S, S]:
     """Return the current state value; consume no input.  Always succeeds."""
-    var out = CtxResult[S, S].success(ctx.state, ctx)
-    return out^
+    return CtxResult[S, S].success(ctx.state, ctx)^
 
 
 @parameter
@@ -55,9 +52,7 @@ def smodify[S: Copyable & IC & Movable & ImplicitlyDeletable,
             f: def(S) capturing -> S](
     ctx: Ctx[S]) -> CtxResult[UInt8, S]:
     """Apply f to the current state; consume no input.  Returns 0."""
-    var new_state = f(ctx.state)
-    var out = CtxResult[UInt8, S].success(0, Ctx[S](ctx.input, new_state))
-    return out^
+    return CtxResult[UInt8, S].success(0, Ctx[S](ctx.input, f(ctx.state)))^
 
 
 # ── smap ──────────────────────────────────────────────────────────────────────
@@ -72,11 +67,8 @@ def smap[T: Copyable & IC & Movable & ImplicitlyDeletable,
     """Apply f to the successful result of stateful parser p."""
     var r = p(ctx)
     if not r.ok:
-        var out = CtxResult[U, S].failure(ctx, r.msg)
-        return out^
-    var val = f(r.get())
-    var out = CtxResult[U, S].success(val, r.rest)
-    return out^
+        return CtxResult[U, S].failure(ctx, r.msg)^
+    return CtxResult[U, S].success(f(r.get()), r.rest)^
 
 
 # ── sattempt ─────────────────────────────────────────────────────────────────
@@ -99,8 +91,7 @@ def sattempt[T: Copyable & IC & Movable & ImplicitlyDeletable,
     """
     var r = p(ctx)
     if not r.ok:
-        var out = CtxResult[T, S].failure(ctx, r.msg)
-        return out^
+        return CtxResult[T, S].failure(ctx, r.msg)^
     return r^
 
 
@@ -116,8 +107,7 @@ def schoice[T: Copyable & IC & Movable & ImplicitlyDeletable,
     var r = p(ctx)
     if r.ok:
         return r^
-    var r2 = q(ctx)
-    return r2^
+    return q(ctx)^
 
 
 # ── smany / smany1 ────────────────────────────────────────────────────────────
@@ -136,8 +126,7 @@ def smany[T: Copyable & IC & Movable & ImplicitlyDeletable,
             break
         results.append(r.get())
         cur = r.rest
-    var out = CtxResult[List[T], S].success(results, cur)
-    return out^
+    return CtxResult[List[T], S].success(results, cur)^
 
 
 @parameter
@@ -148,8 +137,7 @@ def smany1[T: Copyable & IC & Movable & ImplicitlyDeletable,
     """One-or-more applications of p.  Fails if zero matches."""
     var r0 = p(ctx)
     if not r0.ok:
-        var out = CtxResult[List[T], S].failure(ctx, "smany1: zero matches")
-        return out^
+        return CtxResult[List[T], S].failure(ctx, "smany1: zero matches")^
     var results = List[T]()
     results.append(r0.get())
     var cur = r0.rest
@@ -159,8 +147,7 @@ def smany1[T: Copyable & IC & Movable & ImplicitlyDeletable,
             break
         results.append(r.get())
         cur = r.rest
-    var out = CtxResult[List[T], S].success(results, cur)
-    return out^
+    return CtxResult[List[T], S].success(results, cur)^
 
 
 # ── sskip_left / sskip_right ──────────────────────────────────────────────────
@@ -175,10 +162,8 @@ def sskip_left[A: Copyable & IC & Movable & ImplicitlyDeletable,
     """Run p then q; discard p's result, return q's (with latest state)."""
     var ra = p(ctx)
     if not ra.ok:
-        var out = CtxResult[B, S].failure(ctx, ra.msg)
-        return out^
-    var rb = q(ra.rest)
-    return rb^
+        return CtxResult[B, S].failure(ctx, ra.msg)^
+    return q(ra.rest)^
 
 
 @parameter
@@ -191,14 +176,11 @@ def sskip_right[A: Copyable & IC & Movable & ImplicitlyDeletable,
     """Run p then q; discard q's result, return p's (with latest state)."""
     var ra = p(ctx)
     if not ra.ok:
-        var out = CtxResult[A, S].failure(ctx, ra.msg)
-        return out^
+        return CtxResult[A, S].failure(ctx, ra.msg)^
     var rb = q(ra.rest)
     if not rb.ok:
-        var out = CtxResult[A, S].failure(ctx, rb.msg)
-        return out^
-    var out = CtxResult[A, S].success(ra.get(), rb.rest)
-    return out^
+        return CtxResult[A, S].failure(ctx, rb.msg)^
+    return CtxResult[A, S].success(ra.get(), rb.rest)^
 
 
 # ── ssep_by / ssep_by1 ────────────────────────────────────────────────────────
@@ -214,8 +196,7 @@ def ssep_by[T: Copyable & IC & Movable & ImplicitlyDeletable,
     var results = List[T]()
     var r0 = p(ctx)
     if not r0.ok:
-        var out = CtxResult[List[T], S].success(results, ctx)
-        return out^
+        return CtxResult[List[T], S].success(results, ctx)^
     results.append(r0.get())
     var cur = r0.rest
     while True:
@@ -227,8 +208,7 @@ def ssep_by[T: Copyable & IC & Movable & ImplicitlyDeletable,
             break
         results.append(rp.get())
         cur = rp.rest
-    var out = CtxResult[List[T], S].success(results, cur)
-    return out^
+    return CtxResult[List[T], S].success(results, cur)^
 
 
 @parameter
@@ -241,8 +221,7 @@ def ssep_by1[T: Copyable & IC & Movable & ImplicitlyDeletable,
     """One-or-more p separated by sep.  Fails if zero matches."""
     var r0 = p(ctx)
     if not r0.ok:
-        var out = CtxResult[List[T], S].failure(ctx, "ssep_by1: no match")
-        return out^
+        return CtxResult[List[T], S].failure(ctx, "ssep_by1: no match")^
     var results = List[T]()
     results.append(r0.get())
     var cur = r0.rest
@@ -255,5 +234,4 @@ def ssep_by1[T: Copyable & IC & Movable & ImplicitlyDeletable,
             break
         results.append(rp.get())
         cur = rp.rest
-    var out = CtxResult[List[T], S].success(results, cur)
-    return out^
+    return CtxResult[List[T], S].success(results, cur)^
