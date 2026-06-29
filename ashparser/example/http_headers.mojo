@@ -139,15 +139,22 @@ def header_field(inp: Input) -> ParseResult[Header]:
     if not colon.ok:
         var out = ParseResult[Header].failure(inp, "expected ':'"); return out^
 
-    # optional whitespace, value, optional whitespace
+    # optional leading whitespace, value (includes trailing ws), CRLF
     var lo  = ows(colon.rest)
     var rv  = take_while[_is_field_value](lo.rest)
-    var ro  = ows(rv.rest)
-    var cr  = crlf(ro.rest)
+    var cr  = crlf(rv.rest)
     if not cr.ok:
         var out = ParseResult[Header].failure(inp, "expected CRLF after header"); return out^
 
-    var h   = Header(name=rn.get(), value=rv.get())
+    # RFC 9110 §5.5: strip trailing OWS from field-value
+    var raw_val = rv.get()
+    var val_end = raw_val.byte_length()
+    var vp      = raw_val.unsafe_ptr()
+    while val_end > 0 and (vp[val_end - 1] == 32 or vp[val_end - 1] == 9):
+        val_end -= 1
+    var trimmed = raw_val[:val_end]
+
+    var h   = Header(name=rn.get(), value=trimmed)
     var out = ParseResult[Header].success(h^, cr.rest); return out^
 
 
