@@ -10,7 +10,22 @@ BOLD='\033[1m'; CYAN='\033[0;36m'; NC='\033[0m'
 
 FAILURES=0
 
-mj() { (cd "$PROJ" && magic run mojo run -I src "$@" 2>/dev/null); }
+_heal_env() {
+    local cfg="$PROJ/.pixi/envs/default/share/max/modular.cfg"
+    [ -f "$cfg" ] || return 0
+    local rec; rec=$(grep "^package_root" "$cfg" | head -1 | sed 's|.*= ||; s|/.pixi/.*||')
+    [ "$rec" = "$PROJ" ] && return 0; [ -n "$rec" ] || return 0
+    sed -i "s|${rec}/|${PROJ}/|g" "$cfg"
+    printf "${DIM}[env healed → %s]${NC}\n" "$(basename "$PROJ")" >&2
+}
+_heal_env
+
+mj() {
+    local _e _o _rc=0; _e=$(mktemp)
+    _o=$( (cd "$PROJ" && magic run mojo run -I src "$@") 2>"$_e" ) || _rc=$?
+    [ "$_rc" -eq 0 ] || { cat "$_e" >&2; rm -f "$_e"; return "$_rc"; }
+    rm -f "$_e"; printf '%s\n' "$_o"
+}
 
 hdr()  { printf "\n${BOLD}${CYAN}▶  %s${NC}\n" "$*"; }
 ok()   { printf "  ${GREEN}[OK]${NC}  ${BOLD}%-32s${NC}  ${DIM}%s ms${NC}\n" "$1" "$2"; }

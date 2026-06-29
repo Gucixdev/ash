@@ -8,7 +8,22 @@ export PATH="$HOME/.local/bin:$PATH"
 BOLD='\033[1m'; DIM='\033[2m'; CYAN='\033[0;36m'; GREEN='\033[0;32m'
 YELLOW='\033[1;33m'; NC='\033[0m'
 
-mj() { (cd "$PROJ" && magic run mojo run -I src "$@" 2>/dev/null); }
+_heal_env() {
+    local cfg="$PROJ/.pixi/envs/default/share/max/modular.cfg"
+    [ -f "$cfg" ] || return 0
+    local rec; rec=$(grep "^package_root" "$cfg" | head -1 | sed 's|.*= ||; s|/.pixi/.*||')
+    [ "$rec" = "$PROJ" ] && return 0; [ -n "$rec" ] || return 0
+    sed -i "s|${rec}/|${PROJ}/|g" "$cfg"
+    printf "${DIM}[env healed → %s]${NC}\n" "$(basename "$PROJ")" >&2
+}
+_heal_env
+
+mj() {
+    local _e _o _rc=0; _e=$(mktemp)
+    _o=$( (cd "$PROJ" && magic run mojo run -I src "$@") 2>"$_e" ) || _rc=$?
+    [ "$_rc" -eq 0 ] || { cat "$_e" >&2; rm -f "$_e"; return "$_rc"; }
+    rm -f "$_e"; printf '%s\n' "$_o"
+}
 kv()  { echo "$1" | grep -E "^$2=" | cut -d= -f2; }
 msf() { printf "%.1f ms" "$(echo "scale=1; $1/1000000" | bc)"; }
 mbps() {
