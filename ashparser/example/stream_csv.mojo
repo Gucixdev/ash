@@ -16,9 +16,9 @@ Generate a test file and run:
 """
 from sys import argv
 from ashparser.input   import Input
-from ashparser.result  import ParseResult
 from ashparser.prim    import take_while
 from ashparser.fileio  import StreamingInput
+from ashparser.p       import P, p_byte
 
 
 @parameter
@@ -26,24 +26,10 @@ def _not_delim(b: UInt8) -> Bool:
     return b != 44 and b != 10 and b != 13   # not ',', '\n', '\r'
 
 
-def csv_field(inp: Input) -> ParseResult[String]:
-    return take_while[_not_delim](inp)^
-
-
 def count_fields(line: Input) -> Int:
     """Count comma-separated fields in one line Input."""
-    var cur = line
-    var n   = 0
-    while True:
-        var r = csv_field(cur)
-        if not r.ok:
-            break
-        n  += 1
-        cur = r.rest
-        if cur.is_empty() or cur.peek() != 44:
-            break
-        cur = cur.advance(1)   # skip ','
-    return n
+    var r = P[String, take_while[_not_delim]]().p_sep_by(p_byte[UInt8(44)]())(line)
+    return len(r.get()) if r.ok else 0
 
 
 def main() raises:

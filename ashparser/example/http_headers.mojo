@@ -21,6 +21,7 @@ Example input (\\r\\n shown explicitly):
 from ashparser.input  import Input
 from ashparser.prim   import tag, take_while, take_while1, byte, satisfy
 from ashparser.result import ParseResult
+from ashparser.p      import p_byte
 
 
 # ── byte predicates ───────────────────────────────────────────────────────────
@@ -59,13 +60,7 @@ def _not_cr(b: UInt8) -> Bool:
 
 @parameter
 def crlf(inp: Input) -> ParseResult[UInt8]:
-    var r1 = byte[UInt8(13)](inp)   # CR
-    if not r1.ok:
-        var out = ParseResult[UInt8].failure(inp, "expected CR"); return out^
-    var r2 = byte[UInt8(10)](r1.rest)   # LF
-    if not r2.ok:
-        var out = ParseResult[UInt8].failure(inp, "expected LF"); return out^
-    var out = ParseResult[UInt8].success(UInt8(10), r2.rest); return out^
+    return p_byte[UInt8(13)]().p_then(p_byte[UInt8(10)]())(inp)^
 
 
 # ── optional whitespace ────────────────────────────────────────────────────────
