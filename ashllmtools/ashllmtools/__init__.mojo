@@ -4,6 +4,7 @@
 from ashllmtools.tools import (
     ShellResult, shell_run, shell_ok,
     file_exists, read_text, write_text, list_dir,
+    show_tree, file_info, system_info,
     git_branch_current, git_status, git_diff_staged, git_log, git_is_clean,
 )
 

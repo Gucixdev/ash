@@ -1,5 +1,6 @@
 """ashllmtools — test suite."""
 
+from ashllmtools.tools.fs import show_tree, file_info, system_info
 from ashllmtools.decision_contract import (
     Action, evaluate, _contains,
     RISK_LOW, RISK_MEDIUM, RISK_HIGH, RISK_BLOCK,
@@ -381,6 +382,33 @@ def test_skills():
     ok(len(names) >= 15, "list returns all skills including custom")
 
 
+# ── fs: show_tree / file_info / system_info ───────────────────────────────────
+
+def test_fs_extended():
+    # show_tree: returns non-empty string for any real path
+    var tree = show_tree(".", 2)
+    ok(tree.byte_length() > 0, "show_tree returns non-empty output")
+
+    # show_tree: non-existent path returns an informative string
+    var bad = show_tree("/nonexistent_path_xyz", 1)
+    ok(bad.byte_length() > 0, "show_tree non-existent path returns message")
+
+    # file_info: current directory
+    var fi = file_info(".")
+    ok(fi.byte_length() > 0, "file_info('.') returns output")
+    ok(_find_pos(fi, "type=") >= 0, "file_info contains type field")
+
+    # file_info: non-existent path returns error message
+    var fi_bad = file_info("/nonexistent_xyz")
+    ok(_find_pos(fi_bad, "not found") >= 0, "file_info non-existent returns not-found message")
+
+    # system_info: always returns non-empty on Linux
+    var si = system_info()
+    ok(si.byte_length() > 0, "system_info returns output")
+    ok(_find_pos(si, "kernel=") >= 0 or _find_pos(si, "unavailable") >= 0,
+       "system_info contains kernel or unavailable marker")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -391,6 +419,7 @@ def main():
     test_rag()
     test_workflow()
     test_skills()
+    test_fs_extended()
 
     print("\n--- ashllmtools ---")
     print("passed: " + String(_pass))
