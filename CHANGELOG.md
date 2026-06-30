@@ -16,10 +16,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   trailing `(ctx)` annotation on any fact line; `DSLFact` struct, `parse_fact`,
   `parse_facts`, and `DSLStore` collection with `query_lhs`, `query_op`,
   `query_rhs`, `get`, `has`, `add_text`, `clear`, `to_string`
+- `dsl.mojo` — `DSLStore.update(lhs, op, rhs)` upserts a fact (preserving
+  existing `ctx`); `DSLStore.remove(lhs, op)` deletes all matching facts
 - `world_model.mojo` — `WorldModel` now embeds a `DSLStore` as `facts` field;
   new `record(line)` and `record_text(text)` methods let the agent write world
   state as DSL facts; `describe()` now includes `facts=N`; `facts_to_string()`
-  renders the full fact set
+  renders the full fact set; `sync()` auto-records `branch`, `clean`, `remote`
+  as DSL facts on every call; `set_assumption()` mirrors every write to the
+  DSL fact store via `update()` — assumptions and facts are now a single source
+- `context_engine.mojo` — `add_facts(store, priority, source)` converts a
+  `DSLStore` into a `ContextChunk` and injects it into the context window;
+  empty stores are silently skipped
 - New library: 8-layer LLM agent framework in Mojo
 - `agent_state.mojo` — finite state machine (REACT / PLAN / AUTO / PASS / EVAL)
 - `decision_contract.mojo` — risk-rated firewall that gates every action before execution

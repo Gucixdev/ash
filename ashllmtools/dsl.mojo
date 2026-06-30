@@ -326,6 +326,23 @@ struct DSLStore(Movable):
                 return True
         return False
 
+    def update(mut self, lhs: String, op: String, rhs: String):
+        """Update rhs of first matching lhs+op fact (preserving ctx), or append."""
+        for i in range(len(self._facts)):
+            if self._facts[i].lhs == lhs and self._facts[i].op == op:
+                var ctx = self._facts[i].ctx
+                self._facts[i] = DSLFact(lhs=lhs, op=op, rhs=rhs, ctx=ctx)
+                return
+        self._facts.append(DSLFact(lhs=lhs, op=op, rhs=rhs))
+
+    def remove(mut self, lhs: String, op: String):
+        """Remove all facts matching lhs+op."""
+        var kept = List[DSLFact]()
+        for i in range(len(self._facts)):
+            if not (self._facts[i].lhs == lhs and self._facts[i].op == op):
+                kept.append(self._facts[i])
+        self._facts = kept^
+
     def to_string(self) -> String:
         var out = String("")
         for i in range(len(self._facts)):

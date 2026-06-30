@@ -240,6 +240,23 @@ def test_context_engine():
     engine2.dedup()
     ok(len(engine2._chunks) == 1, "dedup removes duplicate content")
 
+    # add_facts: DSLStore → ContextChunk
+    var engine_f = ContextEngine(budget=10000)
+    var dstore = DSLStore()
+    dstore.add_line("env = production")
+    dstore.add_line("cache > db")
+    engine_f.add_facts(dstore)
+    ok(len(engine_f._chunks) == 1, "add_facts: one chunk added")
+    var ctx_f = engine_f.build()
+    ok(_find_pos(ctx_f, "env = production") >= 0, "add_facts: fact content in context")
+    ok(_find_pos(ctx_f, "cache > db") >= 0,       "add_facts: second fact in context")
+
+    # add_facts: empty store adds nothing
+    var engine_e = ContextEngine(budget=10000)
+    var empty_store = DSLStore()
+    engine_e.add_facts(empty_store)
+    ok(len(engine_e._chunks) == 0, "add_facts: empty store adds no chunk")
+
     # CRITICAL chunks bypass budget
     var engine3 = ContextEngine(budget=5)  # tiny budget
     engine3.add(ContextChunk("normal chunk with many bytes here", "big.mojo",
@@ -702,6 +719,29 @@ def test_dsl():
     var s = store3.to_string()
     ok(_find_pos(s, "env = production") >= 0, "to_string: fact rendered")
 
+    # ── update ────────────────────────────────────────────────────────────────
+    var su = DSLStore()
+    su.add_line("env = production (staging)")
+    su.update("env", "=", "development")         # update existing
+    ok(su.get("env", "=") == "development",       "update: rhs replaced")
+    ok(su.size() == 1,                            "update: no duplicate added")
+    var u_ctx = su.query_lhs("env")
+    ok(u_ctx[0].ctx == "staging",                 "update: ctx preserved")
+    su.update("branch", "=", "main")             # append new
+    ok(su.size() == 2,                            "update: append when not found")
+    ok(su.get("branch", "=") == "main",           "update: appended value readable")
+
+    # ── remove ────────────────────────────────────────────────────────────────
+    var sr = DSLStore()
+    sr.add_line("env = production")
+    sr.add_line("cache > db")
+    sr.add_line("env = staging")   # second env = (different value — different row)
+    sr.remove("env", "=")          # removes ALL env = facts
+    ok(sr.size() == 1,             "remove: both env= facts removed")
+    ok(sr.get("cache", ">") == "db", "remove: unrelated fact kept")
+    sr.remove("nonexistent", "=")  # no-op
+    ok(sr.size() == 1,             "remove: no-op on missing fact")
+
     # ── WorldModel.record + facts_to_string ───────────────────────────────────
     var wm = WorldModel()
     ok(wm.facts.size() == 0, "WorldModel starts with no facts")
@@ -721,6 +761,21 @@ def test_dsl():
     wm.sync()
     var desc = wm.describe()
     ok(_find_pos(desc, "facts=4") >= 0, "describe includes fact count")
+
+    # ── WorldModel.sync() auto-records git facts ──────────────────────────────
+    var wm2 = WorldModel()
+    wm2.sync()
+    ok(wm2.facts.get("branch", "=") != "", "sync: branch fact recorded")
+    var clean_val = wm2.facts.get("clean", "=")
+    ok(clean_val == "True" or clean_val == "False", "sync: clean fact recorded")
+
+    # ── set_assumption mirrors to facts ───────────────────────────────────────
+    var wm3 = WorldModel()
+    wm3.set_assumption("env", "production")
+    ok(wm3.facts.get("env", "=") == "production", "set_assumption mirrors to facts")
+    wm3.set_assumption("env", "staging")
+    ok(wm3.facts.get("env", "=") == "staging",    "set_assumption update mirrors to facts")
+    ok(wm3.facts.size() == 1,                      "set_assumption: no duplicate in facts")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────

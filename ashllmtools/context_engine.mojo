@@ -1,5 +1,6 @@
 """
 ashllmtools.context_engine — layer 5: context budget management.
+Imports DSLStore from dsl for the add_facts() bridge.
 
 Responsibilities:
   rank()      — score chunks by relevance + recency + authority
@@ -11,6 +12,8 @@ Budget allocation (default 20k token budget):
   CRITICAL chunks     — always included, bypass budget cap
   remaining budget    — filled in rank order (authority asc, priority asc)
 """
+
+from dsl import DSLStore
 
 # ── Priority constants ────────────────────────────────────────────────────────
 
@@ -82,6 +85,14 @@ struct ContextEngine(Movable):
 
     def add(mut self, chunk: ContextChunk):
         self._chunks.append(chunk)
+
+    def add_facts(mut self, store: DSLStore,
+                  priority: Int = PRI_MEDIUM,
+                  source: String = "world_model:facts"):
+        """Convert a DSLStore into a single ContextChunk and add it."""
+        var text = store.to_string()
+        if text.byte_length() > 0:
+            self.add(ContextChunk(text, source, AUTH_SESSION, priority))
 
     def clear(mut self):
         self._chunks = List[ContextChunk]()

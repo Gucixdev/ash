@@ -99,6 +99,10 @@ struct WorldModel(Movable):
         )
         self.sync_count += 1
         self._degrade_assumptions()
+        self.facts.update("branch", "=", branch)
+        self.facts.update("clean",  "=", String(clean))
+        if remote != "":
+            self.facts.update("remote", "=", remote)
 
     def record(mut self, line: String):
         """Record a DSL fact into the world model's fact store."""
@@ -113,13 +117,15 @@ struct WorldModel(Movable):
         self.files.append(FileState(path=path, exists=file_exists(path)))
 
     def set_assumption(mut self, key: String, value: String):
-        """Record a belief at full confidence."""
+        """Record a belief at full confidence. Mirrors to DSL fact store."""
         for i in range(len(self.assumptions)):
             if self.assumptions[i].key == key:
                 var updated = Assumption(key, value, 100)
                 self.assumptions[i] = updated
+                self.facts.update(key, "=", value)
                 return
         self.assumptions.append(Assumption(key, value, 100))
+        self.facts.update(key, "=", value)
 
     def get_assumption(self, key: String) -> String:
         """Return assumption value, or "" if not tracked."""
