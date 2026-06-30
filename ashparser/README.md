@@ -87,6 +87,36 @@ var r = smany[UInt8, Int, digit_and_count](ctx)
 ./test         # all of the above
 ```
 
+## Parsing files
+
+### Small files (fit in RAM)
+
+```mojo
+from ashparser.fileio import read_file
+
+var (buf, inp) = read_file("data.csv")   # String owns the bytes; Input borrows them
+var result = many[csv_row](inp)
+```
+
+### Large files (any size, O(1 MB) RAM)
+
+```mojo
+from ashparser.fileio import StreamingInput
+
+var reader = StreamingInput.from_file("huge.csv")   # default 1 MB buffer
+while reader.has_more():
+    var line = reader.next_line()          # Input over internal buffer
+    var r    = csv_row(line)              # parse immediately — before next call
+    if r.ok: process(r.get())
+```
+
+For non-line-oriented formats, use `next_chunk()` + `rewind(n)` to handle records
+that span chunk boundaries.
+
+**Lifetime contract**: the `Input` returned by `next_line()` / `next_chunk()`
+borrows `StreamingInput`'s internal buffer. Parse it before calling `next_line()`
+or `next_chunk()` again — backtracking across chunk boundaries is not supported.
+
 ## Install
 
 ```bash

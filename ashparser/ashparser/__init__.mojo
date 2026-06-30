@@ -1,6 +1,7 @@
 from ashparser.input     import Input
 from ashparser.sourcemap import SourceMap, LineCol
 from ashparser.result    import ParseResult
+from ashparser.fileio    import read_file, StreamingInput
 from ashparser.state     import Ctx, CtxResult
 from ashparser.statecomb import (
     slift, sget, smodify, smap,

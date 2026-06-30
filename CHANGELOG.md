@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ashparser
+#### Added
+- `fileio.mojo` — `read_file(path)` for whole-file parsing (RAM-bounded by file size);
+  `StreamingInput` for chunked streaming (RAM = chunk_size, default 1 MB, file size unlimited).
+  No changes to existing combinators — `StreamingInput` produces regular `Input` values.
+- `example/stream_csv.mojo` — streaming CSV example (1M rows with O(1 MB) RAM)
+
 ---
 
 ## [0.1.0] — 2026-06-29
