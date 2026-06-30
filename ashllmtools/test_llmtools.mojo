@@ -24,6 +24,7 @@ from context_engine import (
 from rag import Document, RAGPipeline, FRESH_FETCHED
 from workflow import WorkflowEngine, LOOP_DONE, LOOP_BLOCKED, TS_DONE
 from skills import SkillRegistry, SkillResult
+from world_model import WorldModel
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -289,45 +290,40 @@ def test_rag():
 # ── workflow ──────────────────────────────────────────────────────────────────
 
 def test_workflow():
-    # Single task → completes
-    var w = WorkflowEngine("fix bug in parse_int")
-    _ = w.add_task("read prim.mojo", "read_file")
+    # Single task — git_status always succeeds
+    var w = WorkflowEngine("check repo")
+    _ = w.add_task("", "git_status")
     var r = w.run(max_steps=5)
     ok(r.outcome == LOOP_DONE, "single-task workflow completes")
     ok(w.tasks[0].status == TS_DONE, "task marked DONE")
 
     # Two independent tasks
     var w2 = WorkflowEngine("update tests")
-    _ = w2.add_task("run tests",    "run_tests")
-    _ = w2.add_task("check status", "git_status")
+    _ = w2.add_task("", "git_status")
+    _ = w2.add_task("all passing\n", "reflect")
     var r2 = w2.run(max_steps=10)
     ok(r2.outcome == LOOP_DONE, "two-task workflow completes")
 
     # Dependency ordering: b depends on a → a must complete first
-    var w3 = WorkflowEngine("staged deploy")
-    var a   = w3.add_task("build",  "exec_tests")
-    var b   = w3.add_task("deploy", "deploy")
+    var w3 = WorkflowEngine("staged check")
+    var a   = w3.add_task("line1\nline2\n", "analyze")
+    var b   = w3.add_task("", "git_status")
     w3.add_dep(b, a)
     var r3 = w3.run(max_steps=10)
-    ok(r3.outcome == LOOP_DONE,              "dependent tasks complete in order")
-    ok(w3.tasks[0].status == TS_DONE,        "first dep task done")
-    ok(w3.tasks[1].status == TS_DONE,        "second dep task done")
+    ok(r3.outcome == LOOP_DONE,       "dependent tasks complete in order")
+    ok(w3.tasks[0].status == TS_DONE, "first dep task done")
+    ok(w3.tasks[1].status == TS_DONE, "second dep task done")
 
     # Empty workflow → immediately done
     var w4 = WorkflowEngine("empty")
     var r4 = w4.step()
     ok(r4.outcome == LOOP_DONE, "empty workflow immediately done")
 
-    # Blocked by G1: push to main
-    var w5 = WorkflowEngine("bad push")
-    _ = w5.add_task("push to main", "deploy")
-    # Manually set scope to main so contract blocks it
-    w5.tasks[0].skill = "git push"
-    w5.tasks[0].desc  = "push to main"
-    # The stub executor returns "stub: ..." which doesn't contain "ERROR:", so it passes
-    # To test the block path we'd need scope="main" in the Action; stub always succeeds
+    # Unknown skill → task blocked → workflow blocked
+    var w5 = WorkflowEngine("unknown skill")
+    _ = w5.add_task("some input", "does_not_exist")
     var r5 = w5.run(max_steps=2)
-    ok(r5.outcome == LOOP_DONE, "stub executor always produces done result")
+    ok(r5.outcome == LOOP_BLOCKED, "unknown skill causes blocked workflow")
 
 
 # ── skills ────────────────────────────────────────────────────────────────────
@@ -381,6 +377,57 @@ def test_skills():
     # skill list includes all
     var names = reg.list()
     ok(len(names) >= 15, "list returns all skills including custom")
+
+
+# ── world_model ───────────────────────────────────────────────────────────────
+
+def test_world_model():
+    # __init__: default state is unknown branch, not clean, sync_count=0
+    var wm = WorldModel()
+    ok(wm.git.branch == "(unknown)", "default branch is (unknown)")
+    ok(wm.git.is_clean == False,     "default is_clean is False")
+    ok(wm.sync_count == 0,           "initial sync_count is 0")
+    ok(len(wm.files) == 0,           "no files tracked initially")
+    ok(len(wm.assumptions) == 0,     "no assumptions initially")
+
+    # describe() returns a non-empty string containing branch info
+    var desc = wm.describe()
+    ok(desc.byte_length() > 0,                    "describe() is non-empty")
+    ok(_find_pos(desc, "WorldModel") >= 0,         "describe() contains WorldModel")
+    ok(_find_pos(desc, "syncs=0") >= 0,            "describe() shows sync count")
+
+    # set_assumption / get_assumption round-trip
+    wm.set_assumption("env", "production")
+    ok(wm.get_assumption("env") == "production",   "get_assumption retrieves set value")
+    ok(wm.get_assumption("missing") == "",         "missing assumption returns empty")
+
+    # is_stale() is False when all assumptions have confidence ≥ 50
+    ok(not wm.is_stale(),                          "not stale with fresh assumption")
+
+    # update existing assumption keeps count stable
+    wm.set_assumption("env", "staging")
+    ok(wm.get_assumption("env") == "staging",      "set_assumption updates existing key")
+    ok(len(wm.assumptions) == 1,                   "no duplicate assumption added")
+
+    # sync() re-reads git state and increments sync_count
+    wm.sync()
+    ok(wm.sync_count == 1,                         "sync_count incremented after sync()")
+    ok(wm.git.branch != "",                        "branch non-empty after sync()")
+
+    # After sync, assumption confidence degrades by 10 (100 → 90, still fresh)
+    ok(not wm.is_stale(),                          "still not stale after one sync")
+
+    # track_file: registers file, checks existence
+    wm.track_file("world_model.mojo")
+    ok(len(wm.files) == 1,                         "file tracked")
+    ok(wm.files[0].path == "world_model.mojo",     "tracked file path correct")
+
+    # After 5 syncs (5×10 = 50 degradation, confidence = 50) not stale yet
+    # After 6th sync confidence = 40 < 50 → stale
+    wm.set_assumption("check", "val")
+    for _ in range(6):
+        wm.sync()
+    ok(wm.is_stale(),                              "stale after enough syncs degrade confidence")
 
 
 # ── fs: show_tree / file_info / system_info / scan_log ───────────────────────
@@ -458,6 +505,7 @@ def main():
     test_rag()
     test_workflow()
     test_skills()
+    test_world_model()
     test_fs_extended()
 
     print("\n--- ashllmtools ---")

@@ -19,8 +19,8 @@ Freshness thresholds:
 """
 
 from std.memory import UnsafePointer
-from tools.fs    import read_text, file_exists
-from tools.shell import shell_run
+from tools.sys.fs    import read_text, file_exists
+from tools.sys.shell import shell_run
 from context_engine import ContextChunk, AUTH_REPO, AUTH_FETCHED, AUTH_WEB
 from context_engine import PRI_HIGH, PRI_MEDIUM, PRI_LOW
 

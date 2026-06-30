@@ -8,6 +8,7 @@ Mojo libraries — fast, low-level, zero-dependency.
 |---------|-------------|
 | [ashcore](ashcore/) | Arena allocator, thread pool, DAG schedulers, sync primitives, lock-free queues |
 | [ashparser](ashparser/) | Parser combinator library with stateful parsing and source-map error reporting |
+| [ashllmtools](ashllmtools/) | 8-layer LLM agent framework: state machine, decision contract, skills, workflow engine, memory, context engine, RAG, tool layer |
 
 ## Requirements
 
@@ -29,6 +30,9 @@ cd ashcore && ./test
 
 # ashparser
 cd ashparser && ./test
+
+# ashllmtools (requires Mojo)
+cd ashllmtools && mojo run test_llmtools.mojo
 ```
 
 ## Structure
@@ -60,25 +64,40 @@ ash/
 │   ├── compare
 │   ├── stresstest
 │   └── test
-└── ashparser/
-    ├── README.md
-    ├── pixi.toml
-    ├── conda.recipe/
-    ├── ashparser/        ← source package
-    │   ├── input.mojo
-    │   ├── result.mojo
-    │   ├── sourcemap.mojo
-    │   ├── prim.mojo
-    │   ├── comb.mojo
-    │   ├── state.mojo
-    │   └── statecomb.mojo
-    ├── benchmarks/
-    ├── tests/
-    ├── example/
-    ├── bench
-    ├── compare
-    ├── stresstest
-    └── test
+├── ashparser/
+│   ├── README.md
+│   ├── pixi.toml
+│   ├── conda.recipe/
+│   ├── ashparser/        ← source package
+│   │   ├── input.mojo
+│   │   ├── result.mojo
+│   │   ├── sourcemap.mojo
+│   │   ├── prim.mojo
+│   │   ├── comb.mojo
+│   │   ├── state.mojo
+│   │   ├── statecomb.mojo
+│   │   └── p.mojo
+│   ├── benchmarks/
+│   ├── tests/
+│   ├── example/
+│   ├── bench
+│   ├── compare
+│   ├── stresstest
+│   └── test
+└── ashllmtools/
+    ├── agent_state.mojo
+    ├── decision_contract.mojo
+    ├── skills.mojo
+    ├── workflow.mojo
+    ├── memory.mojo
+    ├── context_engine.mojo
+    ├── world_model.mojo
+    ├── rag/
+    ├── tools/
+    │   ├── sys/           ← shell, fs, git
+    │   ├── code/          ← diff, search
+    │   └── web/           ← fetch
+    └── test_llmtools.mojo
 ```
 
 ## License

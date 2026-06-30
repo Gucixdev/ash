@@ -21,6 +21,7 @@ Exit conditions:
 from decision_contract import Action, GuardResult, evaluate
 from decision_contract import RISK_BLOCK, RISK_HIGH, RISK_LOW
 from decision_contract import risk_name, _contains
+from skills import SkillRegistry, SkillResult
 
 
 # ── Task status ───────────────────────────────────────────────────────────────
@@ -109,16 +110,19 @@ struct WorkflowEngine(Movable):
     var tasks:    List[Task]
     var goal:     String
     var _next_id: Int
+    var _skills:  SkillRegistry
 
     def __init__(out self, goal: String):
         self.tasks    = List[Task]()
         self.goal     = goal
         self._next_id = 0
+        self._skills  = SkillRegistry()
 
     def __moveinit__(out self, owned other: Self):
         self.tasks    = other.tasks^
         self.goal     = other.goal
         self._next_id = other._next_id
+        self._skills  = other._skills^
 
     # ── Task management ───────────────────────────────────────────────────
 
@@ -230,5 +234,12 @@ struct WorkflowEngine(Movable):
         return True
 
     def _execute_task(mut self, idx: Int) -> String:
-        """Stub executor. Returns non-empty result = success."""
-        return "stub: " + self.tasks[idx].desc
+        """Dispatch task to the skill registry. Empty output = failure."""
+        var skill = self.tasks[idx].skill
+        var inp   = self.tasks[idx].desc
+        if skill == "":
+            return "ok"
+        var result = self._skills.run(skill, inp)
+        if not result.ok:
+            return ""
+        return result.output

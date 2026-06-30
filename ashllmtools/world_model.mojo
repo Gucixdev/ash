@@ -6,9 +6,9 @@ It is rebuilt on session start and re-synced before every AUTO step.
 A stale world model is flagged by the decision contract (step 6).
 """
 
-from tools.git import git_branch_current, git_status, git_is_clean
-from tools.fs  import file_exists, read_text
-from tools.shell import shell_run
+from tools.sys.git import git_branch_current, git_status, git_is_clean
+from tools.sys.fs  import file_exists, read_text
+from tools.sys.shell import shell_run
 
 
 struct FileState(Copyable, ImplicitlyCopyable, Movable, ImplicitlyDeletable):

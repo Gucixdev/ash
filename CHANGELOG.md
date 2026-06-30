@@ -7,8 +7,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ashllmtools
+#### Added
+- New library: 8-layer LLM agent framework in Mojo
+- `agent_state.mojo` — finite state machine (REACT / PLAN / AUTO / PASS / EVAL)
+- `decision_contract.mojo` — risk-rated firewall that gates every action before execution
+- `skills.mojo` — `SkillRegistry` with 14 named skills (cognitive + code + sys + web)
+- `workflow.mojo` — `WorkflowEngine`: unified 8-step decision loop with task decomposition,
+  dependency ordering, and `SkillRegistry` dispatch (replaced stub executor)
+- `memory.mojo` — `NoteMemory`, `EpisodicMemory`, `SemanticMemory`, `LongTermMemory`
+- `context_engine.mojo` — priority + authority-ranked `ContextEngine`
+- `rag/__init__.mojo` — RAG pipeline: retrieve → rank → compress → inject
+- `world_model.mojo` — environment snapshot with git state, file tracking, and
+  confidence-degrading assumptions; tested in `test_llmtools.mojo`
+- `tools/sys/` — `shell.mojo`, `fs.mojo`, `git.mojo` (system tool layer)
+- `tools/code/` — `diff.mojo`, `search.mojo`
+- `tools/web/` — `fetch.mojo`
+
 ### ashparser
 #### Added
+- `p.mojo` — fluent `P[T, run]` combinator wrapper with full method-chaining API:
+  `p_then`, `p_skip`, `p_between`, `p_sep_by`, `p_sep_by1`, `p_many`, `p_many1`,
+  `p_map`, `p_flat_map`, `p_verify`, `p_recognize`, `p_attempt`, `p_peek`,
+  `p_skip_many`, `p_skip_many1`, `p_count`, `__or__` (choice operator)
+- `p.mojo` — pre-built aliases: `PDigit`, `PAlpha`, `PAlphanum`, `PWs`, `PDigits`,
+  `PIdent`, `PEof`, `PAny`, `PHexDigit`, `PHexDigits`, `PUint`, `PInt`, `PFloat`,
+  `PQuoted`, `PLineEnd`, `PRestLine`; factory functions `p_byte`, `p_tag`, `p_satisfy`,
+  `p_one_of`, `p_none_of`, `p_take`, `p_is_a`, `p_is_not`
+- Example files rewritten to use the fluent P API: `calc.mojo`, `csv.mojo`, `demo.mojo`,
+  `stream_csv.mojo`, `toml.mojo`, `xml.mojo`, `yaml.mojo`
 - `fileio.mojo` — `read_file(path)` for whole-file parsing (RAM-bounded by file size);
   `StreamingInput` for chunked streaming (RAM = chunk_size, default 1 MB, file size unlimited).
   No changes to existing combinators — `StreamingInput` produces regular `Input` values.

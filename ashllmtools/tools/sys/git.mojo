@@ -1,6 +1,6 @@
 """tools.git — lazytools: git state via shell."""
 
-from tools.shell import shell_run, ShellResult
+from tools.sys.shell import shell_run, ShellResult
 
 
 def git_branch_current() -> String:
