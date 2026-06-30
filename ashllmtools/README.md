@@ -43,6 +43,63 @@ Tool layer (`tools/`):
 | `refactor` | code | File metrics: lines, defs, structs, long lines |
 | `stresstest` | code | Search for boundary-access and while-True patterns |
 
+## DSL — relational notation for world model facts
+
+Facts are written as `lhs operator rhs` with an optional trailing `(context)`.
+Operators are matched longest-first to avoid prefix ambiguity.
+
+| Operator | Meaning |
+|----------|---------|
+| `=`   | definicja / przypisanie |
+| `>`   | preferencja / rekomendacja |
+| `+`   | koniunkcja / złożenie |
+| `+-`  | modyfikacja częściowa / zmiana |
+| `-`   | negacja / usunięcie |
+| `/`   | alternatywa / lub |
+| `<=`  | przechowywanie / odpowiedzialność |
+| `!`   | uwaga |
+| `?`   | sprawdzić |
+| `??`  | otwarte pytanie |
+| `~`   | przybliżenie / domyślność |
+| `&&`  | sekwencja zależna |
+| `&`   | współdzielenie / referencja |
+| `*`   | wszystkie przypadki |
+| `>>`  | prowadzi do / skutkuje |
+| `<<`  | pochodzi z / wynika z |
+| `$`   | wymóg / koszt / końcówka |
+| `%`   | reszta / wycinek / zależny od |
+| `^`   | początek / źródło / nadrzędność |
+| `@`   | miejsce docelowe / adnotacja |
+| `<->` | relacja dwukierunkowa |
+| `<>`  | równoważność |
+| `!=`  | nierówność / konflikt |
+| `==`  | porównanie |
+
+Context annotation — trailing `(...)` on any fact line:
+
+```
+env = production (staging)   → lhs="env" op="=" rhs="production" ctx="staging"
+cache > db (latency)         → preferencja z kontekstem warunku
+```
+
+```mojo
+# DSL world model facts
+from dsl import DSLStore, parse_fact
+from world_model import WorldModel
+
+var wm = WorldModel()
+wm.record("env = production (staging)")
+wm.record("cache > db (latency)")
+wm.record("api_key << vault")
+wm.record("! rate_limit")
+print(wm.facts_to_string())
+
+# Query facts
+var hits = wm.facts.query_lhs("env")   # → [DSLFact(lhs=env op== rhs=production ctx=staging)]
+var rhs  = wm.facts.get("cache", ">")  # → "db"
+var ok   = wm.facts.has("api_key", "<<", "vault")  # → True
+```
+
 ## Quick start
 
 ```mojo
@@ -77,8 +134,14 @@ from world_model import WorldModel
 
 var wm = WorldModel()
 wm.sync()
-print(wm.describe())   # WorldModel(branch=main, clean=True, syncs=1)
+print(wm.describe())   # WorldModel(branch=main, clean=True, syncs=1, facts=0)
 wm.set_assumption("env", "production")
+
+# Record world state as DSL facts
+wm.record("env = production (staging)")
+wm.record("cache > db (latency)")
+wm.record("api_key << vault")
+print(wm.facts_to_string())
 ```
 
 ## Tests
