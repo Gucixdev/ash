@@ -267,17 +267,27 @@ def parse_int(inp: Input) -> ParseResult[Int64]:
         pos += 1
     if pos >= end or not _is_digit(ptr[pos]):
         return ParseResult[Int64].failure(inp, "parse_int: expected digits")^
-    alias INT64_MAX = Int64(9223372036854775807)
-    var val = Int64(0)
+    # Accumulate in UInt64 so |INT64_MIN| = 9223372036854775808 doesn't overflow.
+    alias UINT64_MAX  = UInt64(18446744073709551615)
+    alias INT64_MAX_U = UInt64(9223372036854775807)
+    alias INT64_MIN_U = UInt64(9223372036854775808)   # |INT64_MIN|
+    var val = UInt64(0)
     while pos < end and _is_digit(ptr[pos]):
-        var d = Int64(ptr[pos]) - 48
-        if val > (INT64_MAX - d) // 10:
+        var d = UInt64(ptr[pos]) - 48
+        if val > (UINT64_MAX - d) // 10:
             return ParseResult[Int64].failure(inp, "parse_int: overflow")^
         val = val * 10 + d
         pos += 1
     if neg:
-        val = -val
-    return ParseResult[Int64].success(val, inp.at(pos))^
+        if val > INT64_MIN_U:
+            return ParseResult[Int64].failure(inp, "parse_int: overflow")^
+        if val == INT64_MIN_U:
+            # INT64_MIN itself: -2^63; can't negate INT64_MAX+1 via Int64.
+            return ParseResult[Int64].success(Int64(-9223372036854775807) - 1, inp.at(pos))^
+        return ParseResult[Int64].success(-Int64(val), inp.at(pos))^
+    if val > INT64_MAX_U:
+        return ParseResult[Int64].failure(inp, "parse_int: overflow")^
+    return ParseResult[Int64].success(Int64(val), inp.at(pos))^
 
 
 # ── quoted_string ─────────────────────────────────────────────────────────────

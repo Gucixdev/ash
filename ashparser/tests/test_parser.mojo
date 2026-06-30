@@ -86,6 +86,7 @@ def test_input() raises:
     var inp = Input.from_string(s)
     chk("peek 'h'",        inp.peek() == 104)
     chk("peek_at 1 'e'",   inp.peek_at(1) == 101)
+    chk("peek_at -1 = 0",  inp.peek_at(-1) == 0)
     chk("remaining=5",     inp.remaining() == 5)
     chk("not is_empty",    not inp.is_empty())
     var inp2 = inp.advance(3)
@@ -388,6 +389,8 @@ def test_new_prim() raises:
     var r38 = parse_int(Input.from_string(String("9223372036854775807")))
     chk("parse_int INT64_MAX",   r38.ok and r38.get() == 9223372036854775807)
     chk("parse_int overflow",    not parse_int(Input.from_string(String("9223372036854775808"))).ok)
+    var r39 = parse_int(Input.from_string(String("-9223372036854775808")))
+    chk("parse_int INT64_MIN",   r39.ok and r39.get() == Int64(-9223372036854775807) - 1)
 
 
 # ── New combinators ────────────────────────────────────────────────────────────
