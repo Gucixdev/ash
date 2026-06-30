@@ -9,6 +9,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### ashllmtools
 #### Added
+- Auto-discovery architecture: `SkillRegistry` now scans `skills/` folder for `.md` files with
+  YAML frontmatter (`name:`, `category:`) at startup — no more `_register_builtins()` hardcoding;
+  `skills.mojo` reduced to a thin router that dispatches by category to `tools/<cat>/__init__.mojo`
+- `skill_types.mojo` — shared `SkillResult` and `Skill` structs imported by all category modules,
+  eliminating circular dependency between `skills.mojo` and `tools/<cat>/`
+- `tools/cognitive/__init__.mojo` — owns all cognitive skill implementations (`reflect`, `analyze`,
+  `plan`, `reason`, `decide`, `schedule`, `evaluate`) + `dispatch()` function
+- `tools/code/__init__.mojo` — owns all code skill implementations (`bughunt`, `review`, `refactor`,
+  `stresstest`, `exec`) + `dispatch()` function
+- `tools/sys/__init__.mojo` — owns all sys skill implementations (`git_status`, `git_diff`,
+  `read_file`, `run_tests`, `search`) + `dispatch()` function
+- `tools/trading/__init__.mojo` — owns all trading skill implementations (`price_fetch`,
+  `indicator_calc`, `signal_detect`, `portfolio_analyze`, `backtest`, `whalecheck`, `chart`) +
+  `dispatch()` function
+- `tools/trading/` — 2 new trading skills:
+  - `whalecheck` — statistical outlier detection (>2.5σ absolute bar-to-bar move) to identify
+    large-order whale activity; reports `whale_bars`, `max_move`, `threshold`, alert string
+  - `chart` — ASCII price chart renderer (60×10 grid); linearly interpolates N bars into 60
+    display columns, maps price to HEIGHT rows, outputs `|*  ...|` lines with lo/hi labels
+- `skills/trading/whalecheck.md`, `skills/trading/chart.md` — skill spec docs
+- `workflow/trading/whale_strategy.md` — 6-step workflow: fetch → whalecheck → chart →
+  filtered signal → backtest → DSL facts; includes acceptance criteria table
+- `workflow.mojo` — `load_workflow(name)` reads `workflow/**/<name>.md` by name;
+  `list_workflows()` returns all workflow document stems sorted; imports updated to use
+  `from skill_types import SkillResult`
 - `dsl.mojo` — compact 24-operator relational notation for world model facts:
   operators cover definition (`=`), preference (`>`), sequence (`&&`), leads-to
   (`>>`), bidirectional (`<->`), equivalence (`<>`), negation (`-`), query (`?`),

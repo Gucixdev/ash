@@ -23,7 +23,8 @@ from context_engine import (
 )
 from rag import Document, RAGPipeline, FRESH_FETCHED
 from workflow import WorkflowEngine, LOOP_DONE, LOOP_BLOCKED, TS_DONE
-from skills import SkillRegistry, SkillResult
+from skills import SkillRegistry
+from skill_types import SkillResult
 from world_model import WorldModel
 from dsl import DSLFact, DSLStore, parse_fact, parse_facts
 
@@ -446,6 +447,31 @@ def test_skills():
     # stresstest
     var rst = reg.run("stresstest", ".")
     ok(rst.ok, "stresstest succeeds on repo root")
+
+    # whalecheck — synthetic series with one large spike
+    var prices_flat  = String("100,101,100,101,100,101,100,115,100,101,100")
+    var rwc = reg.run("whalecheck", prices_flat)
+    ok(rwc.ok, "whalecheck succeeds")
+    ok(_find_pos(rwc.output, "whale_analysis:") >= 0, "whalecheck output has header")
+    ok(_find_pos(rwc.output, "whale_bars=") >= 0,     "whalecheck reports whale_bars")
+    ok(not reg.run("whalecheck", "").ok,              "whalecheck fails on empty input")
+
+    # chart — render ASCII chart
+    var rch = reg.run("chart", prices_flat)
+    ok(rch.ok, "chart succeeds")
+    ok(_find_pos(rch.output, "|") >= 0,  "chart output has border characters")
+    ok(_find_pos(rch.output, "lo=") >= 0, "chart output has lo value")
+    ok(_find_pos(rch.output, "hi=") >= 0, "chart output has hi value")
+    ok(not reg.run("chart", "").ok,      "chart fails on empty input")
+
+    # backtest — smoke test with synthetic prices
+    var prices_long = String(
+        "100,101,102,103,102,101,100,99,98,97,96,95,96,97,98,99,100,101,102,103,104,105"
+    )
+    var rbt = reg.run("backtest", "prices:" + prices_long + " fast:3 slow:5")
+    ok(rbt.ok, "backtest succeeds on valid series")
+    ok(_find_pos(rbt.output, "backtest:") >= 0, "backtest output has header")
+    ok(_find_pos(rbt.output, "pnl=") >= 0,      "backtest output has pnl")
 
 
 # ── world_model ───────────────────────────────────────────────────────────────

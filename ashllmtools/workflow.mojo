@@ -21,7 +21,10 @@ Exit conditions:
 from decision_contract import Action, GuardResult, evaluate
 from decision_contract import RISK_BLOCK, RISK_HIGH, RISK_LOW
 from decision_contract import risk_name, _contains
-from skills import SkillRegistry, SkillResult
+from skills import SkillRegistry
+from skill_types import SkillResult
+from tools.sys.shell import shell_run
+from tools.sys.fs    import read_text, file_exists
 
 
 # ── Task status ───────────────────────────────────────────────────────────────
@@ -243,3 +246,47 @@ struct WorkflowEngine(Movable):
         if not result.ok:
             return ""
         return result.output
+
+
+# ── Workflow document helpers ─────────────────────────────────────────────────
+
+def load_workflow(name: String) -> String:
+    """Load a workflow document by name from workflow/**/<name>.md.
+    Returns the file content, or an error string prefixed with 'error:'."""
+    var r = shell_run(
+        "find workflow -name '" + name + ".md' -type f 2>/dev/null | head -1"
+    )
+    if not r.ok or r.stdout == "":
+        return "error: workflow not found: " + name
+    var path = r.stdout
+    var n = path.byte_length(); var ptr = path.unsafe_ptr(); var end = n
+    while end > 0 and (ptr[end-1] == 10 or ptr[end-1] == 13 or ptr[end-1] == 32):
+        end -= 1
+    path = path[:end]
+    if not file_exists(path):
+        return "error: workflow file missing: " + path
+    return read_text(path)
+
+
+def list_workflows() -> List[String]:
+    """Return all workflow document names (stems, without .md) sorted."""
+    var names = List[String]()
+    var r = shell_run("find workflow -name '*.md' -type f | sort 2>/dev/null")
+    if not r.ok or r.stdout == "": return names
+    var listing = r.stdout
+    var n = listing.byte_length(); var ptr = listing.unsafe_ptr(); var ls = 0
+    for i in range(n + 1):
+        if i == n or ptr[i] == 10:
+            if i > ls:
+                var path = listing[ls:i]
+                # Extract stem: last '/' to '.md'
+                var pn = path.byte_length(); var pp = path.unsafe_ptr()
+                var slash = 0
+                for j in range(pn):
+                    if pp[j] == 47: slash = j + 1  # '/'
+                var dot = pn
+                if pn >= 3 and pp[pn-3] == 46 and pp[pn-2] == 109 and pp[pn-1] == 100:
+                    dot = pn - 3  # strip '.md'
+                if slash < dot: names.append(path[slash:dot])
+            ls = i + 1
+    return names
