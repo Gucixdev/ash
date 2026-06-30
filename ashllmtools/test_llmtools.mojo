@@ -378,6 +378,57 @@ def test_skills():
     var names = reg.list()
     ok(len(names) >= 15, "list returns all skills including custom")
 
+    # plan
+    var rplan = reg.run("plan", "Read the file\nRun the tests\nFix the bugs")
+    ok(rplan.ok,                               "plan succeeds")
+    ok(_find_pos(rplan.output, "steps:") >= 0, "plan output has steps header")
+    ok(_find_pos(rplan.output, "1.") >= 0,     "plan produces numbered steps")
+    ok(not reg.run("plan", "").ok,             "plan fails on empty input")
+
+    # reason
+    var rreas = reg.run("reason", "The function fails because input is empty.")
+    ok(rreas.ok,                                         "reason succeeds")
+    ok(_find_pos(rreas.output, "sentences=") >= 0,       "reason reports sentence count")
+    ok(_find_pos(rreas.output, "causal") >= 0,           "reason detects causal keyword")
+    ok(not reg.run("reason", "").ok,                     "reason fails on empty input")
+
+    # decide
+    var rdec = reg.run("decide", "Option A: rewrite the parser")
+    ok(rdec.ok,                                     "decide succeeds")
+    ok(_find_pos(rdec.output, "decision:") >= 0,    "decide output has decision field")
+    ok(_find_pos(rdec.output, "verdict=") >= 0,     "decide output has verdict field")
+    var rdec_risky = reg.run("decide", "delete the entire database")
+    ok(rdec_risky.ok,                                       "decide succeeds on risky input")
+    ok(_find_pos(rdec_risky.output, "review_first") >= 0,   "decide flags destructive action")
+    ok(not reg.run("decide", "").ok,                "decide fails on empty input")
+
+    # schedule
+    var rsched = reg.run("schedule", "deploy after build\nbuild\ntest first")
+    ok(rsched.ok,                                    "schedule succeeds")
+    ok(_find_pos(rsched.output, "schedule:") >= 0,   "schedule output has header")
+    ok(_find_pos(rsched.output, "1.") >= 0,          "schedule produces step 1")
+    ok(not reg.run("schedule", "").ok,               "schedule fails on empty input")
+
+    # bughunt — search in current dir
+    var rbug = reg.run("bughunt", ".")
+    ok(rbug.ok, "bughunt succeeds on repo root")
+
+    # review — succeeds whether or not there are staged changes
+    var rrev = reg.run("review", "")
+    ok(rrev.ok, "review succeeds")
+    ok(_find_pos(rrev.output, "added=") >= 0
+       or _find_pos(rrev.output, "review:") >= 0,
+       "review output contains stats or no-changes message")
+
+    # refactor — on this test file
+    var rref = reg.run("refactor", "test_llmtools.mojo")
+    ok(rref.ok, "refactor succeeds on test_llmtools.mojo")
+    ok(_find_pos(rref.output, "lines=") >= 0, "refactor reports line count")
+
+    # stresstest
+    var rst = reg.run("stresstest", ".")
+    ok(rst.ok, "stresstest succeeds on repo root")
+
 
 # ── world_model ───────────────────────────────────────────────────────────────
 

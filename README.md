@@ -85,18 +85,19 @@ ash/
 │   ├── stresstest
 │   └── test
 └── ashllmtools/
-    ├── agent_state.mojo
-    ├── decision_contract.mojo
-    ├── skills.mojo
-    ├── workflow.mojo
-    ├── memory.mojo
-    ├── context_engine.mojo
-    ├── world_model.mojo
-    ├── rag/
+    ├── README.md
+    ├── agent_state.mojo      ← layer 1: state machine
+    ├── skills.mojo           ← layer 2: 15 built-in skills
+    ├── workflow.mojo         ← layer 3: decision loop + task engine
+    ├── memory.mojo           ← layer 4: note/episodic/semantic/LTM
+    ├── context_engine.mojo   ← layer 5: priority-ranked context window
+    ├── decision_contract.mojo← layer 7: risk-rated action firewall
+    ├── world_model.mojo      ← layer 8: environment snapshot
+    ├── rag/                  ← layer 6: retrieve → rank → inject
     ├── tools/
-    │   ├── sys/           ← shell, fs, git
-    │   ├── code/          ← diff, search
-    │   └── web/           ← fetch
+    │   ├── sys/              ← shell, fs, git
+    │   ├── code/             ← diff, search
+    │   └── web/              ← fetch
     └── test_llmtools.mojo
 ```
 

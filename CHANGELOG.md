@@ -20,6 +20,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `rag/__init__.mojo` — RAG pipeline: retrieve → rank → compress → inject
 - `world_model.mojo` — environment snapshot with git state, file tracking, and
   confidence-degrading assumptions; tested in `test_llmtools.mojo`
+- `skills.mojo` — 8 previously-registered-but-unimplemented skills now fully dispatched:
+  `plan` (numbered step decomposition), `reason` (sentence + keyword analysis),
+  `decide` (first-option extraction + destructive-keyword guard), `schedule` (dependency
+  keyword ordering), `bughunt` (grep error/panic/FIXME patterns), `review` (diff stats +
+  flag unsafe_ptr/external_call/TODO), `refactor` (file metrics: lines/defs/structs/long
+  lines), `stresstest` (boundary-access and while-True pattern search)
+- `ashllmtools/__init__.mojo` — package-level entry point (enables package imports)
+- `ashllmtools/README.md` — architecture overview, skill table, quick-start examples
 - `tools/sys/` — `shell.mojo`, `fs.mojo`, `git.mojo` (system tool layer)
 - `tools/code/` — `diff.mojo`, `search.mojo`
 - `tools/web/` — `fetch.mojo`
