@@ -9,6 +9,7 @@ A stale world model is flagged by the decision contract (step 6).
 from tools.sys.git import git_branch_current, git_status, git_is_clean
 from tools.sys.fs  import file_exists, read_text
 from tools.sys.shell import shell_run
+from dsl import DSLStore, DSLFact, parse_fact
 
 
 struct FileState(Copyable, ImplicitlyCopyable, Movable, ImplicitlyDeletable):
@@ -61,6 +62,7 @@ struct WorldModel(Movable):
     var git:         GitState
     var files:       List[FileState]
     var assumptions: List[Assumption]
+    var facts:       DSLStore
     var sync_count:  Int
 
     def __init__(out self):
@@ -72,12 +74,14 @@ struct WorldModel(Movable):
         )
         self.files       = List[FileState]()
         self.assumptions = List[Assumption]()
+        self.facts       = DSLStore()
         self.sync_count  = 0
 
     def __moveinit__(out self, owned other: Self):
         self.git         = other.git
         self.files       = other.files^
         self.assumptions = other.assumptions^
+        self.facts       = other.facts^
         self.sync_count  = other.sync_count
 
     def sync(mut self):
@@ -95,6 +99,14 @@ struct WorldModel(Movable):
         )
         self.sync_count += 1
         self._degrade_assumptions()
+
+    def record(mut self, line: String):
+        """Record a DSL fact into the world model's fact store."""
+        self.facts.add_line(line)
+
+    def record_text(mut self, text: String):
+        """Parse and record every non-comment line in text as DSL facts."""
+        self.facts.add_text(text)
 
     def track_file(mut self, path: String):
         """Register a file for tracking. Updated on next sync()."""
@@ -127,8 +139,13 @@ struct WorldModel(Movable):
         return (
             "WorldModel(branch=" + self.git.branch
             + ", clean=" + String(self.git.is_clean)
-            + ", syncs=" + String(self.sync_count) + ")"
+            + ", syncs=" + String(self.sync_count)
+            + ", facts=" + String(self.facts.size()) + ")"
         )
+
+    def facts_to_string(self) -> String:
+        """Render all DSL facts as a compact relational summary."""
+        return self.facts.to_string()
 
     def _degrade_assumptions(mut self):
         for i in range(len(self.assumptions)):

@@ -9,6 +9,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### ashllmtools
 #### Added
+- `dsl.mojo` — compact 24-operator relational notation for world model facts:
+  operators cover definition (`=`), preference (`>`), sequence (`&&`), leads-to
+  (`>>`), bidirectional (`<->`), equivalence (`<>`), negation (`-`), query (`?`),
+  approximation (`~`), source (`^`), destination (`@`), and more; optional
+  trailing `(ctx)` annotation on any fact line; `DSLFact` struct, `parse_fact`,
+  `parse_facts`, and `DSLStore` collection with `query_lhs`, `query_op`,
+  `query_rhs`, `get`, `has`, `add_text`, `clear`, `to_string`
+- `world_model.mojo` — `WorldModel` now embeds a `DSLStore` as `facts` field;
+  new `record(line)` and `record_text(text)` methods let the agent write world
+  state as DSL facts; `describe()` now includes `facts=N`; `facts_to_string()`
+  renders the full fact set
 - New library: 8-layer LLM agent framework in Mojo
 - `agent_state.mojo` — finite state machine (REACT / PLAN / AUTO / PASS / EVAL)
 - `decision_contract.mojo` — risk-rated firewall that gates every action before execution

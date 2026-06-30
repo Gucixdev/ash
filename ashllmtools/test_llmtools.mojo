@@ -25,6 +25,7 @@ from rag import Document, RAGPipeline, FRESH_FETCHED
 from workflow import WorkflowEngine, LOOP_DONE, LOOP_BLOCKED, TS_DONE
 from skills import SkillRegistry, SkillResult
 from world_model import WorldModel
+from dsl import DSLFact, DSLStore, parse_fact, parse_facts
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -546,6 +547,182 @@ def test_fs_extended():
         _ = shell_run("rm -f " + tmp + " 2>/dev/null")
 
 
+# ── dsl ───────────────────────────────────────────────────────────────────────
+
+def test_dsl():
+    # ── parse_fact: definition / assignment ──────────────────────────────────
+    var f1 = parse_fact("env = production")
+    ok(f1.ok,             "parse_fact: ok flag set")
+    ok(f1.lhs == "env",   "parse_fact: lhs")
+    ok(f1.op  == "=",     "parse_fact: op =")
+    ok(f1.rhs == "production", "parse_fact: rhs")
+    ok(f1.ctx == "",      "parse_fact: no ctx")
+
+    # ── context extraction ────────────────────────────────────────────────────
+    var f2 = parse_fact("env = production (staging)")
+    ok(f2.ok,               "parse_fact ctx: ok")
+    ok(f2.rhs == "production", "parse_fact ctx: rhs without ctx")
+    ok(f2.ctx == "staging", "parse_fact ctx: ctx extracted")
+
+    # ── 2-char operators: longest-first disambiguation ────────────────────────
+    var feq = parse_fact("ver == 2")
+    ok(feq.op == "==", "parse_fact: == not =")
+
+    var fneq = parse_fact("prod != staging")
+    ok(fneq.op == "!=" and fneq.lhs == "prod", "parse_fact: !=")
+
+    var fleads = parse_fact("error >> retry")
+    ok(fleads.op == ">>" and fleads.rhs == "retry", "parse_fact: >>")
+
+    var ffrom = parse_fact("token << vault")
+    ok(ffrom.op == "<<" and ffrom.lhs == "token", "parse_fact: <<")
+
+    var fown = parse_fact("secrets <= env")
+    ok(fown.op == "<=" and fown.rhs == "env", "parse_fact: <=")
+
+    var fequiv = parse_fact("dev <> local")
+    ok(fequiv.op == "<>" and fequiv.lhs == "dev", "parse_fact: <>")
+
+    var fbidir = parse_fact("a <-> b")
+    ok(fbidir.op == "<->", "parse_fact: <-> (3-char) beats <>")
+
+    var fmod = parse_fact("config +- timeout")
+    ok(fmod.op == "+-", "parse_fact: +-")
+
+    var fseq = parse_fact("task_a && task_b")
+    ok(fseq.op == "&&", "parse_fact: &&")
+
+    var fopen = parse_fact("perf ?? unknown")
+    ok(fopen.op == "??", "parse_fact: ??")
+
+    # ── 1-char operators ──────────────────────────────────────────────────────
+    var fpref = parse_fact("cache > db")
+    ok(fpref.op == ">" and fpref.lhs == "cache", "parse_fact: >")
+
+    var fand = parse_fact("auth + tls")
+    ok(fand.op == "+", "parse_fact: +")
+
+    var fnot = parse_fact("debug -")
+    ok(fnot.op == "-" and fnot.lhs == "debug", "parse_fact: -")
+
+    var fwarn = parse_fact("! rate_limit")
+    ok(fwarn.op == "!" and fwarn.rhs == "rate_limit", "parse_fact: !")
+
+    var fcheck = parse_fact("health ?")
+    ok(fcheck.op == "?", "parse_fact: ?")
+
+    var fapprox = parse_fact("timeout ~ 30")
+    ok(fapprox.op == "~", "parse_fact: ~")
+
+    var fref = parse_fact("pool & workers")
+    ok(fref.op == "&", "parse_fact: &")
+
+    var fall = parse_fact("* endpoints")
+    ok(fall.op == "*", "parse_fact: *")
+
+    var freq = parse_fact("tls $")
+    ok(freq.op == "$", "parse_fact: $")
+
+    var fslice = parse_fact("rows % 1000")
+    ok(fslice.op == "%", "parse_fact: %")
+
+    var fsrc = parse_fact("^ config")
+    ok(fsrc.op == "^", "parse_fact: ^")
+
+    var fat = parse_fact("log @ stdout")
+    ok(fat.op == "@", "parse_fact: @")
+
+    var falt = parse_fact("json / msgpack")
+    ok(falt.op == "/" and falt.rhs == "msgpack", "parse_fact: /")
+
+    # ── bad line (no operator) ────────────────────────────────────────────────
+    var fbad = parse_fact("justword")
+    ok(not fbad.ok, "parse_fact: no-op line → ok=False")
+
+    # ── to_string / describe round-trip ──────────────────────────────────────
+    var fts = parse_fact("cache > db (latency)")
+    ok(_find_pos(fts.to_string(), "cache > db") >= 0,    "to_string contains lhs op rhs")
+    ok(_find_pos(fts.to_string(), "(latency)") >= 0,     "to_string contains ctx")
+    ok(_find_pos(fts.describe(), "DSLFact") >= 0,        "describe contains DSLFact")
+
+    # ── parse_facts: multi-line + comment skip ────────────────────────────────
+    var text = (
+        "# this is a comment\n"
+        + "env = production\n"
+        + "cache > db\n"
+        + "\n"
+        + "api_key << vault\n"
+    )
+    var facts = parse_facts(text)
+    ok(len(facts) == 3, "parse_facts: 3 facts (comment + blank skipped)")
+
+    # ── DSLStore ──────────────────────────────────────────────────────────────
+    var store = DSLStore()
+    ok(store.size() == 0, "DSLStore starts empty")
+
+    store.add_line("env = production (staging)")
+    store.add_line("cache > db")
+    store.add_line("api_key << vault")
+    ok(store.size() == 3, "DSLStore.size after 3 add_line calls")
+
+    # query_lhs
+    var by_lhs = store.query_lhs("env")
+    ok(len(by_lhs) == 1, "query_lhs: finds 1 match")
+    ok(by_lhs[0].rhs == "production", "query_lhs: correct rhs")
+
+    # query_op
+    var by_op = store.query_op("=")
+    ok(len(by_op) == 1, "query_op: finds 1 = fact")
+
+    # query_rhs
+    var by_rhs = store.query_rhs("vault")
+    ok(len(by_rhs) == 1, "query_rhs: finds api_key << vault")
+    ok(by_rhs[0].lhs == "api_key", "query_rhs: correct lhs")
+
+    # get
+    ok(store.get("env", "=") == "production", "get: returns rhs for lhs+op")
+    ok(store.get("missing", "=") == "",        "get: empty for missing key")
+
+    # has
+    ok(store.has("cache", ">", "db"),         "has: exact match found")
+    ok(not store.has("cache", ">", "memory"), "has: wrong rhs → False")
+
+    # add_text
+    var store2 = DSLStore()
+    store2.add_text("a = 1\nb = 2\n# skip me\nc = 3\n")
+    ok(store2.size() == 3, "add_text: 3 facts from multi-line text")
+
+    # clear
+    store2.clear()
+    ok(store2.size() == 0, "clear: store is empty after clear")
+
+    # to_string
+    var store3 = DSLStore()
+    store3.add_line("env = production")
+    var s = store3.to_string()
+    ok(_find_pos(s, "env = production") >= 0, "to_string: fact rendered")
+
+    # ── WorldModel.record + facts_to_string ───────────────────────────────────
+    var wm = WorldModel()
+    ok(wm.facts.size() == 0, "WorldModel starts with no facts")
+
+    wm.record("env = production (staging)")
+    wm.record("cache > db")
+    ok(wm.facts.size() == 2, "WorldModel.record adds facts")
+
+    wm.record_text("api_key << vault\n# comment\ntls $\n")
+    ok(wm.facts.size() == 4, "WorldModel.record_text adds facts (comment skipped)")
+
+    var wm_str = wm.facts_to_string()
+    ok(_find_pos(wm_str, "env = production") >= 0, "facts_to_string contains env fact")
+    ok(_find_pos(wm_str, "cache > db") >= 0,       "facts_to_string contains cache fact")
+
+    # describe() now shows fact count
+    wm.sync()
+    var desc = wm.describe()
+    ok(_find_pos(desc, "facts=4") >= 0, "describe includes fact count")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -557,6 +734,7 @@ def main():
     test_workflow()
     test_skills()
     test_world_model()
+    test_dsl()
     test_fs_extended()
 
     print("\n--- ashllmtools ---")
