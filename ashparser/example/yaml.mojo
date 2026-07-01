@@ -9,8 +9,8 @@ Parses "key: value" lines; value is the rest of the line (trimmed).
 Skips comment and blank lines.
 """
 from ashparser.input  import Input
-from ashparser.prim   import ident, ws, take_while, byte
-from ashparser.result import ParseResult
+from ashparser.prim   import take_while
+from ashparser.p      import P, PIdent, PWs, p_byte
 
 
 @parameter
@@ -33,11 +33,9 @@ def consume_newline(inp: Input) -> Input:
 
 
 def skip_line(inp: Input) -> Input:
-    var r = take_while[_not_newline](inp)
-    return r.rest
+    return P[String, take_while[_not_newline]]()(inp).rest
 
 
-# Return trimmed length (drop trailing spaces/tabs).
 def rtrim_len(s: String) -> Int:
     var n = s.byte_length()
     while n > 0:
@@ -66,8 +64,7 @@ def main() raises:
 
     var inp = Input.from_string(src)
     while not inp.is_empty():
-        var rws = ws(inp)
-        var cur = rws.rest
+        var cur = PWs()(inp).rest
         if cur.is_empty():
             break
         var b = cur.peek()
@@ -76,19 +73,18 @@ def main() raises:
         if b == 35:   # '#'
             inp = consume_newline(skip_line(cur)); continue
 
-        var rk = ident(cur)
+        var rk = PIdent()(cur)
         if not rk.ok:
             inp = consume_newline(skip_line(cur)); continue
 
-        var colon = byte[UInt8(58)](rk.rest)   # ':'
-        if not colon.ok:
+        # ws? ':' ws?
+        var col = PWs().p_then(p_byte[UInt8(58)]()).p_skip(PWs())(rk.rest)
+        if not col.ok:
             inp = consume_newline(skip_line(cur)); continue
 
-        var rws2 = ws(colon.rest)
-        var rval = take_while[_not_newline](rws2.rest)
+        var rval = P[String, take_while[_not_newline]]()(col.rest)
         var raw = rval.get()
 
-        # trim trailing spaces via StringSlice
         var vlen = rtrim_len(raw)
         var vptr = UnsafePointer[UInt8, ImmutAnyOrigin](
             unsafe_from_address=Int(raw.unsafe_ptr())

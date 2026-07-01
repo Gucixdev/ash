@@ -19,66 +19,60 @@ def _not_quote(b: UInt8) -> Bool:
 def null_p(inp: Input) -> ParseResult[String]:
     var r = tag["null"](inp)
     if not r.ok:
-        var out = ParseResult[String].failure(inp, r.msg); return out^
-    var out = ParseResult[String].success(String("null"), r.rest); return out^
+        return ParseResult[String].failure(inp, r.msg)^
+    return ParseResult[String].success(String("null"), r.rest)^
 
 @parameter
 def true_p(inp: Input) -> ParseResult[String]:
     var r = tag["true"](inp)
     if not r.ok:
-        var out = ParseResult[String].failure(inp, r.msg); return out^
-    var out = ParseResult[String].success(String("true"), r.rest); return out^
+        return ParseResult[String].failure(inp, r.msg)^
+    return ParseResult[String].success(String("true"), r.rest)^
 
 @parameter
 def false_p(inp: Input) -> ParseResult[String]:
     var r = tag["false"](inp)
     if not r.ok:
-        var out = ParseResult[String].failure(inp, r.msg); return out^
-    var out = ParseResult[String].success(String("false"), r.rest); return out^
+        return ParseResult[String].failure(inp, r.msg)^
+    return ParseResult[String].success(String("false"), r.rest)^
 
 @parameter
 def bool_p(inp: Input) -> ParseResult[String]:
-    var r = choice[String, true_p, false_p](inp); return r^
+    return choice[String, true_p, false_p](inp)^
 
 @parameter
 def int_p(inp: Input) -> ParseResult[String]:
-    var r = digits(inp); return r^
+    return digits(inp)^
 
 @parameter
 def str_p(inp: Input) -> ParseResult[String]:
     var open = byte[UInt8(34)](inp)
     if not open.ok:
-        var out = ParseResult[String].failure(inp, "expected '\"'"); return out^
+        return ParseResult[String].failure(inp, "expected '\"'")^
     var content = take_while[_not_quote](open.rest)
     var close = byte[UInt8(34)](content.rest)
     if not close.ok:
-        var out = ParseResult[String].failure(inp, "expected closing '\"'"); return out^
-    var out = ParseResult[String].success(content.get(), close.rest); return out^
+        return ParseResult[String].failure(inp, "expected closing '\"'")^
+    return ParseResult[String].success(content.get(), close.rest)^
 
 @parameter
 def value_p(inp: Input) -> ParseResult[String]:
     var r1 = null_p(inp)
-    if r1.ok:
-        return r1^
+    if r1.ok: return r1^
     var r2 = bool_p(inp)
-    if r2.ok:
-        return r2^
+    if r2.ok: return r2^
     var r3 = int_p(inp)
-    if r3.ok:
-        return r3^
+    if r3.ok: return r3^
     var r4 = str_p(inp)
-    if r4.ok:
-        return r4^
-    var out = ParseResult[String].failure(inp, "expected value")
-    return out^
+    if r4.ok: return r4^
+    return ParseResult[String].failure(inp, "expected value")^
 
 @parameter
 def comma_ws(inp: Input) -> ParseResult[UInt8]:
     var r1 = byte[UInt8(44)](inp)
     if not r1.ok:
-        var out = ParseResult[UInt8].failure(inp, r1.msg); return out^
-    var r2 = ws(r1.rest)
-    var out = ParseResult[UInt8].success(r1.get(), r2.rest); return out^
+        return ParseResult[UInt8].failure(inp, r1.msg)^
+    return ParseResult[UInt8].success(r1.get(), ws(r1.rest).rest)^
 
 
 def main() raises:

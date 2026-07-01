@@ -4,7 +4,8 @@ ashparser — test suite
 Pattern: chk(label, cond) raises on first failure.
 All parser functions used as combinator arguments must be @parameter def.
 """
-from ashparser.input  import Input
+from ashparser.input     import Input
+from ashparser.sourcemap import SourceMap, LineCol
 from ashparser.result import ParseResult
 from ashparser.prim   import (
     satisfy, byte, tag, take_while, take_while1,
@@ -15,6 +16,7 @@ from ashparser.prim   import (
     hex_digit, hex_digits,
     parse_uint, parse_int,
     quoted_string,
+    any_byte, take, is_a, is_not, take_while_m_n, parse_float,
 )
 from ashparser.comb   import (
     Pair, opt, many, many1, map, choice,
@@ -23,13 +25,23 @@ from ashparser.comb   import (
     peek, not_followed_by,
     verify, skip_many, skip_many1,
     count, recognize,
+    attempt,
+    flat_map, value, fold_many0, fold_many1, cond,
+)
+from ashparser.p import (
+    P,
+    p_byte, p_tag, p_satisfy, p_one_of, p_none_of, p_take, p_is_a, p_is_not,
+    PDigit, PAlpha, PAlphanum, PWs, PDigits, PIdent, PEof, PAny,
+    PHexDigit, PHexDigits, PUint, PInt, PFloat, PQuoted, PLineEnd, PRestLine,
 )
 from ashparser.state     import Ctx, CtxResult
 from ashparser.statecomb import (
     slift, sget, smodify, smap,
-    schoice, smany, smany1,
+    sattempt, schoice, smany, smany1,
     sskip_left, sskip_right,
     ssep_by, ssep_by1,
+    sseq, sbetween, scount, srecognize,
+    svalue, sflat_map, sfold_many0, sfold_many1, scond,
 )
 
 
@@ -80,6 +92,7 @@ def test_input() raises:
     var inp = Input.from_string(s)
     chk("peek 'h'",        inp.peek() == 104)
     chk("peek_at 1 'e'",   inp.peek_at(1) == 101)
+    chk("peek_at -1 = 0",  inp.peek_at(-1) == 0)
     chk("remaining=5",     inp.remaining() == 5)
     chk("not is_empty",    not inp.is_empty())
     var inp2 = inp.advance(3)
@@ -317,6 +330,73 @@ def test_new_prim() raises:
     chk("quoted unterminated",   not quoted_string(Input.from_string(String("\"abc"))).ok)
     var r24 = quoted_string(Input.from_string(String("\"\" rest")))
     chk("quoted empty string",   r24.ok and r24.get() == "")
+    chk("quoted bad escape",     not quoted_string(Input.from_string(String("\"\\x41\""))).ok)
+
+    # any_byte
+    var r25 = any_byte(Input.from_string(String("ABC")))
+    chk("any_byte ok",           r25.ok and r25.get() == 65)
+    chk("any_byte advances",     r25.rest.remaining() == 2)
+    chk("any_byte EOF fail",     not any_byte(Input.from_string(String(""))).ok)
+
+    # take[N]
+    var r26 = take[3](Input.from_string(String("hello")))
+    chk("take[3] ok",            r26.ok and r26.get() == "hel")
+    chk("take[3] rest",          r26.rest.remaining() == 2)
+    chk("take[0] ok",            take[0](Input.from_string(String("x"))).ok)
+    chk("take[3] short fail",    not take[3](Input.from_string(String("ab"))).ok)
+
+    # is_a
+    var r27 = is_a["0123456789"](Input.from_string(String("123abc")))
+    chk("is_a ok",               r27.ok and r27.get() == "123")
+    chk("is_a rest",             r27.rest.remaining() == 3)
+    chk("is_a fail",             not is_a["0123456789"](Input.from_string(String("abc"))).ok)
+    chk("is_a EOF fail",         not is_a["abc"](Input.from_string(String(""))).ok)
+
+    # is_not
+    var r28 = is_not[","](Input.from_string(String("hello,world")))
+    chk("is_not ok",             r28.ok and r28.get() == "hello")
+    chk("is_not rest",           r28.rest.remaining() == 6)
+    chk("is_not stop at delim",  not is_not[","](Input.from_string(String(",x"))).ok)
+    chk("is_not EOF fail",       not is_not[","](Input.from_string(String(""))).ok)
+
+    # take_while_m_n
+    var r29 = take_while_m_n[2, 5, _is_digit](Input.from_string(String("12345678")))
+    chk("twmn cap at MAX",       r29.ok and r29.get() == "12345")
+    var r30 = take_while_m_n[2, 5, _is_digit](Input.from_string(String("12abc")))
+    chk("twmn in range",         r30.ok and r30.get() == "12")
+    chk("twmn below MIN fail",   not take_while_m_n[2, 5, _is_digit](Input.from_string(String("1abc"))).ok)
+    chk("twmn zero match fail",  not take_while_m_n[1, 3, _is_digit](Input.from_string(String("abc"))).ok)
+
+    # parse_float
+    var r31 = parse_float(Input.from_string(String("3.14")))
+    chk("parse_float 3.14",      r31.ok and r31.get() > 3.13 and r31.get() < 3.15)
+    var r32 = parse_float(Input.from_string(String("-0.5")))
+    chk("parse_float -0.5",      r32.ok and r32.get() == -0.5)
+    var r33 = parse_float(Input.from_string(String("1e2")))
+    chk("parse_float 1e2",       r33.ok and r33.get() == 100.0)
+    var r34 = parse_float(Input.from_string(String("2.5e-1")))
+    chk("parse_float 2.5e-1",    r34.ok and r34.get() == 0.25)
+    var r35 = parse_float(Input.from_string(String("1e400")))
+    chk("parse_float 1e400",     r35.ok and r35.get() > 1e300)
+    var r36 = parse_float(Input.from_string(String("1e99999")))
+    chk("parse_float 1e99999",   r36.ok and r36.get() > 1e300)
+    chk("parse_float no digits", not parse_float(Input.from_string(String("abc"))).ok)
+    chk("parse_float sign only", not parse_float(Input.from_string(String("-"))).ok)
+    var r36b = parse_float(Input.from_string(String("+1.5")))
+    chk("parse_float +1.5",      r36b.ok and r36b.get() == 1.5)
+    var r36c = parse_float(Input.from_string(String(".75")))
+    chk("parse_float .75",       r36c.ok and r36c.get() == 0.75)
+    chk("parse_float bare dot",  not parse_float(Input.from_string(String("."))).ok)
+
+    # parse_uint / parse_int boundary values
+    var r37 = parse_uint(Input.from_string(String("18446744073709551615")))
+    chk("parse_uint UINT64_MAX", r37.ok and r37.get() == 18446744073709551615)
+    chk("parse_uint overflow",   not parse_uint(Input.from_string(String("18446744073709551616"))).ok)
+    var r38 = parse_int(Input.from_string(String("9223372036854775807")))
+    chk("parse_int INT64_MAX",   r38.ok and r38.get() == 9223372036854775807)
+    chk("parse_int overflow",    not parse_int(Input.from_string(String("9223372036854775808"))).ok)
+    var r39 = parse_int(Input.from_string(String("-9223372036854775808")))
+    chk("parse_int INT64_MIN",   r39.ok and r39.get() == Int64(-9223372036854775807) - 1)
 
 
 # ── New combinators ────────────────────────────────────────────────────────────
@@ -383,6 +463,47 @@ def test_new_comb() raises:
     # recognize with many — captures raw bytes of multi-parse
     var r12 = recognize[List[UInt8], many[UInt8, digit]](Input.from_string(String("456xyz")))
     chk("recognize many",        r12.ok and r12.get() == "456")
+
+    # flat_map — dependent sequencing: read byte, then dispatch on its value
+    @parameter
+    def pick_tag(b: UInt8, rest: Input) -> ParseResult[String]:
+        if b == 49:   # '1'
+            return tag["a"](rest)^
+        return tag["b"](rest)^
+
+    var r13 = flat_map[UInt8, String, digit, pick_tag](Input.from_string(String("1a")))
+    chk("flat_map first branch", r13.ok and r13.get() == "a")
+    var r14 = flat_map[UInt8, String, digit, pick_tag](Input.from_string(String("2b")))
+    chk("flat_map second branch", r14.ok and r14.get() == "b")
+    chk("flat_map p fail",       not flat_map[UInt8, String, digit, pick_tag](Input.from_string(String("xb"))).ok)
+    chk("flat_map f fail",       not flat_map[UInt8, String, digit, pick_tag](Input.from_string(String("1b"))).ok)
+
+    # value — map a successful parse to a constant
+    var r15 = value[UInt8, Bool, digit](True, Input.from_string(String("5rest")))
+    chk("value ok",              r15.ok and r15.get() == True)
+    chk("value rest",            r15.rest.remaining() == 4)
+    chk("value fail",            not value[UInt8, Bool, digit](True, Input.from_string(String("x"))).ok)
+
+    # fold_many0 / fold_many1 — accumulating loops
+    @parameter
+    def add_digit(acc: Int, b: UInt8) -> Int:
+        return acc * 10 + Int(b) - 48
+
+    var r16 = fold_many0[UInt8, Int, digit, add_digit](0, Input.from_string(String("123abc")))
+    chk("fold_many0 ok",         r16.ok and r16.get() == 123)
+    var r17 = fold_many0[UInt8, Int, digit, add_digit](0, Input.from_string(String("abc")))
+    chk("fold_many0 zero ok",    r17.ok and r17.get() == 0)
+    var r18 = fold_many1[UInt8, Int, digit, add_digit](0, Input.from_string(String("456xyz")))
+    chk("fold_many1 ok",         r18.ok and r18.get() == 456)
+    chk("fold_many1 fail",       not fold_many1[UInt8, Int, digit, add_digit](0, Input.from_string(String("xyz"))).ok)
+
+    # cond — predicate-gated parsing
+    var r19 = cond[UInt8, digit](True, Input.from_string(String("5rest")))
+    chk("cond True ok",          r19.ok and r19.get() == 53)
+    chk("cond True rest",        r19.rest.remaining() == 4)
+    var r20 = cond[UInt8, digit](False, Input.from_string(String("5rest")))
+    chk("cond False fail",       not r20.ok)
+    chk("cond False no consume", r20.rest.remaining() == 5)
 
 
 # ── Stateful parsing ──────────────────────────────────────────────────────────
@@ -510,6 +631,119 @@ def test_state() raises:
         Ctx[Int](Input.from_string(String("abc")), 0)).ok)
 
 
+# ── attempt + SourceMap ───────────────────────────────────────────────────────
+
+def test_attempt_sourcemap() raises:
+    section("attempt + SourceMap + message_ctx_fast")
+
+    # ── attempt ──────────────────────────────────────────────────────────────
+
+    # A parser that consumes 1 byte then fails — returns failure at rest+1.
+    # Without attempt the caller sees the advanced position; with attempt it
+    # sees the original input position.
+    @parameter
+    def two_alpha(inp: Input) -> ParseResult[String]:
+        var r1 = alpha(inp)
+        if not r1.ok:
+            return ParseResult[String].failure(inp, "two_alpha: no first")^
+        var r2 = alpha(r1.rest)
+        if not r2.ok:
+            # Consumed 1 byte before failing — rest is past first byte
+            return ParseResult[String].failure(r1.rest, "two_alpha: no second")^
+        var buf = String()
+        buf += chr(Int(r1.get()))
+        buf += chr(Int(r2.get()))
+        return ParseResult[String].success(buf, r2.rest)^
+
+    # Success path: attempt is transparent
+    var inp_ok = Input.from_string(String("abrest"))
+    var r1 = attempt[String, two_alpha](inp_ok)
+    chk("attempt: success ok",          r1.ok and r1.get() == "ab")
+    chk("attempt: success rest",        r1.rest.remaining() == 4)
+
+    # Partial consumption case: "a5" — 'a' consumed before '5' fails
+    var inp_a5 = Input.from_string(String("a5b"))
+    var r_raw = two_alpha(inp_a5)
+    chk("raw: partial fail pos=1",      not r_raw.ok and r_raw.rest.pos == 1)
+    var r_att = attempt[String, two_alpha](inp_a5)
+    chk("attempt: fail resets pos=0",   not r_att.ok and r_att.rest.pos == 0)
+    chk("attempt: fail msg preserved",  r_att.msg == "two_alpha: no second")
+
+    # Total failure (no consumption): attempt is transparent
+    var r_none = attempt[String, two_alpha](Input.from_string(String("5xy")))
+    chk("attempt: no-consume fail ok",  not r_none.ok and r_none.rest.pos == 0)
+
+    # ── SourceMap + LineCol ───────────────────────────────────────────────────
+
+    # "hello\nworld\nfoo"  (byte offsets 0–14)
+    # Byte 0  = 'h' → line 1, col 1
+    # Byte 5  = '\n' → line 1, col 6
+    # Byte 6  = 'w' → line 2, col 1
+    # Byte 11 = '\n' → line 2, col 6
+    # Byte 12 = 'f' → line 3, col 1
+    # Byte 14 = 'o' → line 3, col 3
+    var src = String("hello\nworld\nfoo")
+    var inp_ml = Input.from_string(src)
+    var sm = SourceMap(inp_ml)
+
+    var lc0 = sm.line_col(0)
+    chk("sourcemap: byte 0 → 1:1",   lc0.line == 1 and lc0.col == 1)
+    var lc5 = sm.line_col(5)
+    chk("sourcemap: byte 5 → 1:6",   lc5.line == 1 and lc5.col == 6)
+    var lc6 = sm.line_col(6)
+    chk("sourcemap: byte 6 → 2:1",   lc6.line == 2 and lc6.col == 1)
+    var lc11 = sm.line_col(11)
+    chk("sourcemap: byte 11 → 2:6",  lc11.line == 2 and lc11.col == 6)
+    var lc12 = sm.line_col(12)
+    chk("sourcemap: byte 12 → 3:1",  lc12.line == 3 and lc12.col == 1)
+    var lc14 = sm.line_col(14)
+    chk("sourcemap: byte 14 → 3:3",  lc14.line == 3 and lc14.col == 3)
+
+    # LineCol.__str__
+    chk("linecol: __str__",           String(lc12) == "3:1")
+
+    # ── message_ctx_fast ──────────────────────────────────────────────────────
+
+    var inp_err = Input.from_string(src)
+    var sm2 = SourceMap(inp_err)
+    # Fabricate a failure at byte 12 ('f' on line 3)
+    var fail_r = ParseResult[UInt8].failure(inp_err.advance(12), "unexpected token")
+    var ctx_msg = fail_r.message_ctx_fast(sm2)
+    chk("msg_ctx_fast: has msg",      ctx_msg.find("unexpected token") >= 0)
+    chk("msg_ctx_fast: has 3:1",      ctx_msg.find("3:1") >= 0)
+    chk("msg_ctx_fast: has byte 12",  ctx_msg.find("12") >= 0)
+
+    # ── sattempt ─────────────────────────────────────────────────────────────
+
+    # A stateful parser that increments state then tries to match "ab".
+    # On failure the state is already mutated — sattempt restores the original ctx.
+    @parameter
+    def stateful_ab(ctx: Ctx[Int]) -> CtxResult[String, Int]:
+        var new_ctx = Ctx[Int](ctx.input, ctx.state + 1)
+        var r = tag["ab"](new_ctx.input)
+        if not r.ok:
+            return CtxResult[String, Int].failure(new_ctx, r.msg)^
+        return CtxResult[String, Int].success(r.get(), Ctx[Int](r.rest, new_ctx.state))^
+
+    # Without sattempt: failure but state mutated
+    var ctx_fail = Ctx[Int](Input.from_string(String("xy")), 0)
+    var r_raw2 = stateful_ab(ctx_fail)
+    chk("sattempt: raw fail state=1", not r_raw2.ok and r_raw2.rest.state == 1)
+
+    # With sattempt: failure resets to original ctx
+    var r_sat = sattempt[String, Int, stateful_ab](ctx_fail)
+    chk("sattempt: fail ok=F",        not r_sat.ok)
+    chk("sattempt: state restored",   r_sat.rest.state == 0)
+    chk("sattempt: input restored",   r_sat.rest.input.remaining() == 2)
+
+    # Success path: sattempt is transparent
+    var ctx_ok2 = Ctx[Int](Input.from_string(String("abrest")), 5)
+    var r_ok2 = sattempt[String, Int, stateful_ab](ctx_ok2)
+    chk("sattempt: ok passes through", r_ok2.ok and r_ok2.get() == "ab")
+    chk("sattempt: ok state updated",  r_ok2.rest.state == 6)
+    chk("sattempt: ok rest",           r_ok2.rest.input.remaining() == 4)
+
+
 # ── Integration ───────────────────────────────────────────────────────────────
 
 def test_integration() raises:
@@ -559,6 +793,289 @@ def test_integration() raises:
     chk("ident[2]=baz",         r3.get()[2] == "baz")
 
 
+# ── New stateful combinators ─────────────────────────────────────────────────
+
+def test_state_new() raises:
+    section("New stateful combinators")
+
+    # Helper stateful parsers reused throughout
+    @parameter
+    def sdig(ctx: Ctx[Int]) -> CtxResult[String, Int]:
+        return slift[String, Int, digits](ctx)^
+
+    @parameter
+    def sdig_b(ctx: Ctx[Int]) -> CtxResult[UInt8, Int]:
+        return slift[UInt8, Int, digit](ctx)^
+
+    @parameter
+    def soparen(ctx: Ctx[Int]) -> CtxResult[UInt8, Int]:
+        return slift[UInt8, Int, open_paren](ctx)^
+
+    @parameter
+    def scparen(ctx: Ctx[Int]) -> CtxResult[UInt8, Int]:
+        return slift[UInt8, Int, close_paren](ctx)^
+
+    @parameter
+    def scomma_s(ctx: Ctx[Int]) -> CtxResult[UInt8, Int]:
+        return slift[UInt8, Int, comma](ctx)^
+
+    # sseq — pair both results, state threads
+    var ctx0 = Ctx[Int](Input.from_string(String("42rest")), 0)
+    var r1 = sseq[String, String, Int, sdig, sdig](ctx0)
+    chk("sseq fail (only one digits run)", not r1.ok)
+
+    var ctx0b = Ctx[Int](Input.from_string(String("12 34")), 0)
+    @parameter
+    def sdig_ws(ctx: Ctx[Int]) -> CtxResult[String, Int]:
+        var r = slift[String, Int, digits](ctx)^
+        if not r.ok:
+            return r^
+        return slift[String, Int, ws](r.rest)^
+
+    var r1b = sseq[String, String, Int, sdig, sdig](
+        Ctx[Int](Input.from_string(String("1234")), 0)
+    )
+    chk("sseq fail no second token", not r1b.ok)
+
+    # Use a pair where both parsers can succeed on same input by splitting
+    var ctx1 = Ctx[Int](Input.from_string(String("(5)")), 0)
+    var r2 = sbetween[UInt8, UInt8, UInt8, Int, soparen, sdig_b, scparen](ctx1)
+    chk("sbetween ok",              r2.ok and r2.get() == 53)
+    chk("sbetween rest",            r2.rest.input.is_empty())
+    var ctx1f = Ctx[Int](Input.from_string(String("5)")), 0)
+    chk("sbetween no open fail",    not sbetween[UInt8, UInt8, UInt8, Int, soparen, sdig_b, scparen](ctx1f).ok)
+
+    # scount — exactly N
+    var ctx2 = Ctx[Int](Input.from_string(String("123rest")), 0)
+    var r3 = scount[UInt8, Int, sdig_b, 3](ctx2)
+    chk("scount[3] ok",             r3.ok and len(r3.get()) == 3)
+    chk("scount[3] rest",           r3.rest.input.remaining() == 4)
+    var ctx2f = Ctx[Int](Input.from_string(String("12x")), 0)
+    chk("scount[3] fail backtrack", not scount[UInt8, Int, sdig_b, 3](ctx2f).ok)
+    chk("scount[3] fail input",     scount[UInt8, Int, sdig_b, 3](ctx2f).rest.input.remaining() == 3)
+
+    # srecognize — capture bytes as string
+    var ctx3 = Ctx[Int](Input.from_string(String("456abc")), 0)
+    var r4 = srecognize[String, Int, sdig](ctx3)
+    chk("srecognize ok",            r4.ok and r4.get() == "456")
+    chk("srecognize rest",          r4.rest.input.remaining() == 3)
+    chk("srecognize fail",          not srecognize[String, Int, sdig](
+        Ctx[Int](Input.from_string(String("abc")), 0)).ok)
+
+    # svalue — constant on success
+    var ctx4 = Ctx[Int](Input.from_string(String("7rest")), 0)
+    var r5 = svalue[UInt8, Bool, Int, sdig_b](True, ctx4)
+    chk("svalue ok",                r5.ok and r5.get() == True)
+    chk("svalue rest",              r5.rest.input.remaining() == 4)
+    chk("svalue fail",              not svalue[UInt8, Bool, Int, sdig_b](
+        True, Ctx[Int](Input.from_string(String("x")), 0)).ok)
+
+    # sflat_map — dependent sequencing
+    @parameter
+    def stag_a_or_b(b: UInt8, ctx: Ctx[Int]) -> CtxResult[String, Int]:
+        if b == 49:   # '1'
+            return slift[String, Int, tag["a"]](ctx)^
+        return slift[String, Int, tag["b"]](ctx)^
+
+    var r6 = sflat_map[UInt8, String, Int, sdig_b, stag_a_or_b](
+        Ctx[Int](Input.from_string(String("1a")), 0)
+    )
+    chk("sflat_map first",          r6.ok and r6.get() == "a")
+    var r7 = sflat_map[UInt8, String, Int, sdig_b, stag_a_or_b](
+        Ctx[Int](Input.from_string(String("2b")), 0)
+    )
+    chk("sflat_map second",         r7.ok and r7.get() == "b")
+    chk("sflat_map p fail",         not sflat_map[UInt8, String, Int, sdig_b, stag_a_or_b](
+        Ctx[Int](Input.from_string(String("xb")), 0)).ok)
+    chk("sflat_map f fail",         not sflat_map[UInt8, String, Int, sdig_b, stag_a_or_b](
+        Ctx[Int](Input.from_string(String("1b")), 0)).ok)
+
+    # sfold_many0 / sfold_many1 — accumulating folds
+    @parameter
+    def add_b(acc: Int, b: UInt8) -> Int:
+        return acc * 10 + Int(b) - 48
+
+    var r8 = sfold_many0[UInt8, Int, Int, sdig_b, add_b](
+        0, Ctx[Int](Input.from_string(String("789xyz")), 0)
+    )
+    chk("sfold_many0 ok",           r8.ok and r8.get() == 789)
+    var r9 = sfold_many0[UInt8, Int, Int, sdig_b, add_b](
+        0, Ctx[Int](Input.from_string(String("xyz")), 0)
+    )
+    chk("sfold_many0 zero ok",      r9.ok and r9.get() == 0)
+    var r10 = sfold_many1[UInt8, Int, Int, sdig_b, add_b](
+        0, Ctx[Int](Input.from_string(String("42rest")), 0)
+    )
+    chk("sfold_many1 ok",           r10.ok and r10.get() == 42)
+    chk("sfold_many1 fail",         not sfold_many1[UInt8, Int, Int, sdig_b, add_b](
+        0, Ctx[Int](Input.from_string(String("xyz")), 0)).ok)
+
+    # scond — predicate gate
+    var r11 = scond[String, Int, sdig](True, Ctx[Int](Input.from_string(String("99rest")), 0))
+    chk("scond True ok",            r11.ok and r11.get() == "99")
+    var r12 = scond[String, Int, sdig](False, Ctx[Int](Input.from_string(String("99rest")), 0))
+    chk("scond False fail",         not r12.ok)
+    chk("scond False no consume",   r12.rest.input.remaining() == 6)
+
+
+# ── Fluent P wrapper ──────────────────────────────────────────────────────────
+
+def test_fluent() raises:
+    section("Fluent P wrapper")
+
+    # ── __call__ / parse ──────────────────────────────────────────────────────
+    var pd = PDigit()
+    var r1 = pd(Input.from_string(String("5rest")))
+    chk("P __call__ ok",            r1.ok and r1.get() == 53)
+    chk("P __call__ rest",          r1.rest.remaining() == 4)
+    chk("P parse ok",               PDigit().parse("7").ok and PDigit().parse("7").get() == 55)
+    chk("P parse fail",             not PDigit().parse("x").ok)
+
+    # ── Pre-built aliases ─────────────────────────────────────────────────────
+    chk("PAlpha ok",                PAlpha().parse("a").ok)
+    chk("PAlphanum digit",          PAlphanum().parse("9").ok)
+    chk("PWs ok",                   PWs().parse("  \t").ok)
+    chk("PDigits ok",               PDigits().parse("123").ok)
+    chk("PIdent ok",                PIdent().parse("foo_bar").ok)
+    chk("PEof ok",                  PEof().parse("").ok)
+    chk("PAny ok",                  PAny().parse("x").ok)
+    var ru = PUint().parse("42")
+    chk("PUint ok",                 ru.ok and ru.get() == 42)
+    var ri = PInt().parse("-7")
+    chk("PInt ok",                  ri.ok and ri.get() == -7)
+    var rq = PQuoted().parse("\"hi\"")
+    chk("PQuoted ok",               rq.ok and rq.get() == "hi")
+
+    # ── Factory functions ─────────────────────────────────────────────────────
+    chk("p_byte ok",                p_byte[UInt8(44)]().parse(",").ok)
+    chk("p_byte fail",              not p_byte[UInt8(44)]().parse("x").ok)
+    chk("p_tag ok",                 p_tag["hello"]().parse("hello").ok)
+    chk("p_tag fail",               not p_tag["hello"]().parse("world").ok)
+    chk("p_one_of ok",              p_one_of["+-*/"]().parse("+").ok)
+    chk("p_one_of fail",            not p_one_of["+-*/"]().parse("x").ok)
+    chk("p_none_of ok",             p_none_of[",\n"]().parse("x").ok)
+    chk("p_none_of fail",           not p_none_of[",\n"]().parse(",").ok)
+    var rtk = p_take[3]().parse("hello")
+    chk("p_take ok",                rtk.ok and rtk.get() == "hel")
+    chk("p_is_a ok",                p_is_a["0123456789"]().parse("123abc").ok)
+    chk("p_is_not ok",              p_is_not[","]().parse("hello,").ok)
+
+    # ── p_many / p_many1 ──────────────────────────────────────────────────────
+    var rm = PDigit().p_many()
+    var r3 = rm.parse("123abc")
+    chk("p_many ok len=3",          r3.ok and len(r3.get()) == 3)
+    chk("p_many zero ok",           PDigit().p_many().parse("abc").ok)
+    var rm1 = PDigit().p_many1()
+    chk("p_many1 ok",               rm1.parse("42x").ok)
+    chk("p_many1 fail",             not rm1.parse("x").ok)
+
+    # ── p_skip_many / p_skip_many1 ────────────────────────────────────────────
+    chk("p_skip_many ok",           PDigit().p_skip_many().parse("123abc").ok)
+    chk("p_skip_many1 ok",          PDigit().p_skip_many1().parse("456x").ok)
+    chk("p_skip_many1 fail",        not PDigit().p_skip_many1().parse("x").ok)
+
+    # ── p_count ───────────────────────────────────────────────────────────────
+    var rc = PDigit().p_count[3]()
+    chk("p_count ok",               rc.parse("123rest").ok)
+    chk("p_count fail",             not rc.parse("12x").ok)
+
+    # ── p_map ─────────────────────────────────────────────────────────────────
+    @parameter
+    def to_int(b: UInt8) -> Int:
+        return Int(b) - 48
+
+    var rm_int = PDigit().p_map[Int, to_int]()
+    chk("p_map ok",                 rm_int.parse("7").ok and rm_int.parse("7").get() == 7)
+    chk("p_map fail",               not rm_int.parse("x").ok)
+
+    # ── p_verify ──────────────────────────────────────────────────────────────
+    @parameter
+    def is_upper(b: UInt8) -> Bool:
+        return b >= 65 and b <= 90
+
+    chk("p_verify ok",              PAlpha().p_verify[is_upper]().parse("A").ok)
+    chk("p_verify fail",            not PAlpha().p_verify[is_upper]().parse("a").ok)
+
+    # ── p_recognize ───────────────────────────────────────────────────────────
+    var rr_r = PDigit().p_many1().p_recognize().parse("456xyz")
+    chk("p_recognize ok",           rr_r.ok and rr_r.get() == "456")
+    chk("p_recognize rest",         rr_r.rest.remaining() == 3)
+
+    # ── p_attempt / p_peek ────────────────────────────────────────────────────
+    chk("p_attempt ok",             PDigit().p_attempt().parse("5").ok)
+    chk("p_attempt fail",           not PDigit().p_attempt().parse("x").ok)
+    var pk_r = PDigit().p_peek()(Input.from_string(String("5x")))
+    chk("p_peek ok",                pk_r.ok and pk_r.get() == 53)
+    chk("p_peek no consume",        pk_r.rest.remaining() == 2)
+
+    # ── p_then ────────────────────────────────────────────────────────────────
+    # tag["hello"] then ws — returns ws result (whitespace string), discards "hello"
+    var ht = p_tag["hello"]().p_then(PWs())
+    var r5 = ht.parse("hello   x")
+    chk("p_then ok",                r5.ok)
+    chk("p_then rest",              r5.rest.remaining() == 1)
+
+    # ── p_skip ────────────────────────────────────────────────────────────────
+    # digits then comma — returns digits, discards ","
+    var ds = PDigits().p_skip(p_byte[UInt8(44)]())
+    var r6 = ds.parse("123,rest")
+    chk("p_skip ok",                r6.ok and r6.get() == "123")
+    chk("p_skip rest",              r6.rest.remaining() == 4)
+
+    # ── p_between ─────────────────────────────────────────────────────────────
+    # digit inside parens '(' digit ')'
+    var lparen = p_byte[UInt8(40)]()   # '('
+    var rparen = p_byte[UInt8(41)]()   # ')'
+    var pb = PDigit().p_between(lparen, rparen)
+    chk("p_between ok",             pb.parse("(5)").ok and pb.parse("(5)").get() == 53)
+    chk("p_between no left fail",   not pb.parse("5)").ok)
+    chk("p_between no right fail",  not pb.parse("(5").ok)
+
+    # ── p_sep_by / p_sep_by1 ──────────────────────────────────────────────────
+    var comma_p = p_byte[UInt8(44)]()   # ','
+    var sep = PDigit().p_sep_by(comma_p)
+    var r7 = sep.parse("1,2,3")
+    chk("p_sep_by ok len=3",        r7.ok and len(r7.get()) == 3)
+    chk("p_sep_by empty ok",        PDigit().p_sep_by(comma_p).parse("").ok)
+
+    var sep1 = PDigit().p_sep_by1(comma_p)
+    var r7b = sep1.parse("1,2")
+    chk("p_sep_by1 ok len=2",       r7b.ok and len(r7b.get()) == 2)
+    chk("p_sep_by1 fail",           not sep1.parse("x").ok)
+
+    # ── __or__ ────────────────────────────────────────────────────────────────
+    var da = PDigit() | PAlpha()
+    chk("| digit branch",           da.parse("5").ok and da.parse("5").get() == 53)
+    chk("| alpha branch",           da.parse("a").ok and da.parse("a").get() == 97)
+    chk("| both fail",              not da.parse("!").ok)
+
+    # ── p_flat_map ────────────────────────────────────────────────────────────
+    @parameter
+    def pick_by_digit(b: UInt8, rest: Input) -> ParseResult[String]:
+        if b == 49:   # '1' → expect "a"
+            return tag["a"](rest)^
+        return tag["b"](rest)^
+
+    var fm = PDigit().p_flat_map[String, pick_by_digit]()
+    chk("p_flat_map branch 1",      fm.parse("1a").ok and fm.parse("1a").get() == "a")
+    chk("p_flat_map branch 2",      fm.parse("2b").ok and fm.parse("2b").get() == "b")
+    chk("p_flat_map p fail",        not fm.parse("xa").ok)
+    chk("p_flat_map f fail",        not fm.parse("1b").ok)
+
+    # ── Multi-level method chain ───────────────────────────────────────────────
+    # ws → digits → comma: skip leading ws, parse digits, skip trailing comma
+    var chained = PWs().p_then(PDigits()).p_skip(comma_p)
+    var r9 = chained.parse("  42,rest")
+    chk("chain ws+digits+comma ok", r9.ok and r9.get() == "42")
+    chk("chain rest",               r9.rest.remaining() == 4)
+
+    # digits separated by comma → list of strings
+    var csv = PDigits().p_sep_by1(comma_p)
+    var r10 = csv.parse("10,20,30")
+    chk("csv sep ok len=3",         r10.ok and len(r10.get()) == 3)
+    chk("csv second item",          r10.get()[1] == "20")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() raises:
@@ -568,6 +1085,9 @@ def main() raises:
     test_comb()
     test_new_prim()
     test_new_comb()
+    test_attempt_sourcemap()
     test_state()
+    test_state_new()
     test_integration()
+    test_fluent()
     print("\nAll tests passed.")

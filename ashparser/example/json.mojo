@@ -1,126 +1,154 @@
 """
-ashparser example: parse a JSON array of scalars.
+ashparser example: full JSON parser (RFC 8259).
 
-  [1, true, null, "hello"]  →  4 elements
-
-Supported value types: null, bool (true/false), integer, quoted string.
-No floats, no nested objects.
+null | true | false | number (int/float/scientific) | string | array | object
+Recursive descent — json_value/json_array/json_object call each other.
+Output type is String (re-serialized JSON) — sidesteps recursive value types.
 """
-from ashparser.input  import Input
-from ashparser.prim   import tag, ws, take_while, digits, byte
-from ashparser.comb   import choice, sep_by
+from ashparser.input     import Input
+from ashparser.sourcemap import SourceMap
+from ashparser.prim   import tag, ws, quoted_string
 from ashparser.result import ParseResult
 
 
-# ── predicates ───────────────────────────────────────────────────────────────
+# ── number ────────────────────────────────────────────────────────────────────
 
-@parameter
-def _not_quote(b: UInt8) -> Bool:
-    return b != 34   # not '"'
-
-
-# ── atomic value parsers (all return ParseResult[String]) ────────────────────
-
-@parameter
-def null_p(inp: Input) -> ParseResult[String]:
-    var r = tag["null"](inp)
-    if not r.ok:
-        var out = ParseResult[String].failure(inp, r.msg); return out^
-    var out = ParseResult[String].success(String("null"), r.rest); return out^
-
-
-@parameter
-def true_p(inp: Input) -> ParseResult[String]:
-    var r = tag["true"](inp)
-    if not r.ok:
-        var out = ParseResult[String].failure(inp, r.msg); return out^
-    var out = ParseResult[String].success(String("true"), r.rest); return out^
-
-
-@parameter
-def false_p(inp: Input) -> ParseResult[String]:
-    var r = tag["false"](inp)
-    if not r.ok:
-        var out = ParseResult[String].failure(inp, r.msg); return out^
-    var out = ParseResult[String].success(String("false"), r.rest); return out^
-
-
-@parameter
-def bool_p(inp: Input) -> ParseResult[String]:
-    var r = choice[String, true_p, false_p](inp); return r^
+def _jnum(inp: Input) -> ParseResult[String]:
+    var p = inp.pos
+    var e = inp.len
+    var ptr = inp._ptr()
+    if p < e and ptr[p] == 45:
+        p += 1                                          # optional '-'
+    if p >= e or ptr[p] < 48 or ptr[p] > 57:
+        var r = ParseResult[String].failure(inp, "number: expected digit")
+        return r^
+    if ptr[p] == 48:
+        p += 1                                          # lone '0'
+    else:
+        while p < e and ptr[p] >= 48 and ptr[p] <= 57:
+            p += 1
+    if p < e and ptr[p] == 46:                         # '.' fraction
+        p += 1
+        if p >= e or ptr[p] < 48 or ptr[p] > 57:
+            var r = ParseResult[String].failure(inp, "number: bad frac")
+            return r^
+        while p < e and ptr[p] >= 48 and ptr[p] <= 57:
+            p += 1
+    if p < e and (ptr[p] == 101 or ptr[p] == 69):     # 'e'/'E' exponent
+        p += 1
+        if p < e and (ptr[p] == 43 or ptr[p] == 45):
+            p += 1
+        if p >= e or ptr[p] < 48 or ptr[p] > 57:
+            var r = ParseResult[String].failure(inp, "number: bad exp")
+            return r^
+        while p < e and ptr[p] >= 48 and ptr[p] <= 57:
+            p += 1
+    var r = ParseResult[String].success(inp.slice_str(inp.pos, p), inp.at(p))
+    return r^
 
 
-@parameter
-def int_p(inp: Input) -> ParseResult[String]:
-    var r = digits(inp); return r^
+# ── value / array / object (mutually recursive) ───────────────────────────────
+
+def json_value(inp: Input) -> ParseResult[String]:
+    var c = ws(inp).rest
+    var b = c.peek()
+    if b == 110: return tag["null"](c)^             # 'n'
+    if b == 116: return tag["true"](c)^             # 't'
+    if b == 102: return tag["false"](c)^            # 'f'
+    if b == 91:  return json_array(c)^              # '['
+    if b == 123: return json_object(c)^             # '{'
+    if b == 34:                                      # '"'
+        var r = quoted_string(c)
+        if not r.ok:
+            var e = ParseResult[String].failure(inp, r.msg)
+            return e^
+        var e = ParseResult[String].success('"' + r.get() + '"', r.rest)
+        return e^
+    if b == 45 or (b >= 48 and b <= 57):            # '-' or digit
+        return _jnum(c)^
+    var e = ParseResult[String].failure(inp, "json_value: unexpected byte " + String(Int(b)))
+    return e^
 
 
-@parameter
-def str_p(inp: Input) -> ParseResult[String]:
-    var open = byte[UInt8(34)](inp)   # '"'
-    if not open.ok:
-        var out = ParseResult[String].failure(inp, "expected '\"'"); return out^
-    var content = take_while[_not_quote](open.rest)
-    var close = byte[UInt8(34)](content.rest)   # '"'
-    if not close.ok:
-        var out = ParseResult[String].failure(inp, "expected closing '\"'"); return out^
-    var out = ParseResult[String].success(content.get(), close.rest); return out^
+def json_array(inp: Input) -> ParseResult[String]:
+    if inp.peek() != 91:
+        var e = ParseResult[String].failure(inp, "expected '['")
+        return e^
+    var cur = ws(inp.advance(1)).rest
+    var out = String("[")
+    var need_sep = False
+    while True:
+        if cur.peek() == 93:                         # ']'
+            var e = ParseResult[String].success(out + "]", cur.advance(1))
+            return e^
+        if need_sep:
+            if cur.peek() != 44:
+                var e = ParseResult[String].failure(inp, "expected ','")
+                return e^
+            cur = ws(cur.advance(1)).rest
+            out += ", "
+        var r = json_value(cur)
+        if not r.ok:
+            var e = ParseResult[String].failure(inp, r.msg)
+            return e^
+        out += r.get()
+        need_sep = True
+        cur = ws(r.rest).rest
 
 
-# ── combined value parser ─────────────────────────────────────────────────────
-
-@parameter
-def value_p(inp: Input) -> ParseResult[String]:
-    var r1 = null_p(inp)
-    if r1.ok:
-        return r1^
-    var r2 = bool_p(inp)
-    if r2.ok:
-        return r2^
-    var r3 = int_p(inp)
-    if r3.ok:
-        return r3^
-    var r4 = str_p(inp)
-    if r4.ok:
-        return r4^
-    var out = ParseResult[String].failure(inp, "expected value")
-    return out^
-
-
-# ── comma separator (with trailing whitespace) ─────────────────────────────
-
-@parameter
-def comma_ws(inp: Input) -> ParseResult[UInt8]:
-    var r1 = byte[UInt8(44)](inp)   # ','
-    if not r1.ok:
-        var out = ParseResult[UInt8].failure(inp, r1.msg); return out^
-    var r2 = ws(r1.rest)
-    var out = ParseResult[UInt8].success(r1.get(), r2.rest); return out^
+def json_object(inp: Input) -> ParseResult[String]:
+    if inp.peek() != 123:
+        var e = ParseResult[String].failure(inp, "expected '{'")
+        return e^
+    var cur = ws(inp.advance(1)).rest
+    var out = String("{")
+    var need_sep = False
+    while True:
+        if cur.peek() == 125:                        # '}'
+            var e = ParseResult[String].success(out + "}", cur.advance(1))
+            return e^
+        if need_sep:
+            if cur.peek() != 44:
+                var e = ParseResult[String].failure(inp, "expected ','")
+                return e^
+            cur = ws(cur.advance(1)).rest
+            out += ", "
+        var rk = quoted_string(cur)
+        if not rk.ok:
+            var e = ParseResult[String].failure(inp, "expected key string")
+            return e^
+        cur = ws(rk.rest).rest
+        if cur.peek() != 58:                         # ':'
+            var e = ParseResult[String].failure(inp, "expected ':'")
+            return e^
+        cur = ws(cur.advance(1)).rest
+        var rv = json_value(cur)
+        if not rv.ok:
+            var e = ParseResult[String].failure(inp, rv.msg)
+            return e^
+        out += '"' + rk.get() + '": ' + rv.get()
+        need_sep = True
+        cur = ws(rv.rest).rest
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def main() raises:
-    var src = String("""[1, true, null, "hello", 42, false]""")
-    print("input: " + src)
-
+def _run(label: String, src: String) raises:
+    print("── " + label + " " + String("─") * (50 - len(label)))
+    print("in : " + src)
     var inp = Input.from_string(src)
+    var r   = json_value(inp)
+    if r.ok:
+        print("out: " + r.get())
+    else:
+        print("ERR: " + r.message_ctx_fast(SourceMap(inp)))
+    print("")
 
-    var open = byte[UInt8(91)](inp)   # '['
-    if not open.ok:
-        print("error: expected '['"); return
 
-    var r1 = ws(open.rest)
-    var items = sep_by[String, UInt8, value_p, comma_ws](r1.rest)
-    if not items.ok:
-        print("error: " + items.msg); return
-
-    var r2 = ws(items.rest)
-    var close = byte[UInt8(93)](r2.rest)  # ']'
-    if not close.ok:
-        print("error: expected ']'"); return
-
-    var vals = items.get()
-    print("parsed " + String(len(vals)) + " values:")
-    for i in range(len(vals)):
-        print("  [" + String(i) + "] " + vals[i])
+def main() raises:
+    _run("API response", '{"id":42,"name":"ashparser","stable":true,"score":-3.14,'
+         '"tags":["mojo","parsing","zero-copy"],"meta":{"author":"drbongo","year":2025}}')
+    _run("nested arrays",  '[[1,2,3],[true,null,false],["a","b"]]')
+    _run("all number kinds", '[0,-99,3.14,-2.718e+10,1E100]')
+    _run("empty containers", '[{},[],{"x":[]}]')
+    _run("error: bad value", '{"key":INVALID}')

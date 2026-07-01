@@ -1,48 +1,66 @@
 """
-ashparser example: parse a CSV line into fields.
+ashparser example: RFC 4180 CSV parser (fluent API).
 
-  "Alice,30,Warsaw"  →  3 fields
+    "field with, comma"  →  field with, comma
+    "say ""hi"""         →  say "hi"      (doubled-quote escape)
 
-Uses sep_by with a take_while field parser — the separator is a bare comma.
+Unquoted fields: everything up to the next comma or line ending.
 """
 from ashparser.input  import Input
-from ashparser.prim   import take_while, byte
-from ashparser.comb   import sep_by
 from ashparser.result import ParseResult
+from ashparser.prim   import take_while, byte
+from ashparser.p      import P
 
 
 @parameter
-def _not_comma(b: UInt8) -> Bool:
+def _not_sep(b: UInt8) -> Bool:
     return b != 44 and b != 10 and b != 13   # not ',' '\n' '\r'
 
 
 @parameter
-def field(inp: Input) -> ParseResult[String]:
-    var r = take_while[_not_comma](inp)
-    return r^
+def _quoted_field(inp: Input) -> ParseResult[String]:
+    """RFC 4180 quoted field; "" inside becomes a single "."""
+    if inp.is_empty() or inp.peek() != 34:
+        return ParseResult[String].failure(inp, "expected '\"'")^
+    var p   = inp.pos + 1
+    var end = inp.len
+    var ptr = inp._ptr()
+    var buf = List[UInt8]()
+    while p < end:
+        var b = ptr[p]
+        if b != 34:
+            buf.append(b); p += 1
+        elif p + 1 < end and ptr[p + 1] == 34:
+            buf.append(34); p += 2   # "" → single "
+        else:
+            p += 1; break            # closing quote
+    buf.append(0)
+    var s = String(StringSlice(ptr=buf.unsafe_ptr(), length=len(buf) - 1))
+    return ParseResult[String].success(s, inp.at(p))^
 
 
-@parameter
-def comma(inp: Input) -> ParseResult[UInt8]:
-    var r = byte[UInt8(44)](inp)
-    return r^
+alias Quoted   = P[String, _quoted_field]
+alias Unquoted = P[String, take_while[_not_sep]]
+alias Comma    = P[UInt8,  byte[UInt8(44)]]
+
+
+def parse_record(line: String) -> List[String]:
+    var r = (Quoted() | Unquoted()).p_sep_by(Comma()).parse(line)
+    return r.get() if r.ok else List[String]()
 
 
 def main() raises:
-    var lines = List[String]()
-    lines.append(String("Alice,30,Warsaw"))
-    lines.append(String("Bob,25,Krakow"))
-    lines.append(String("single"))
-    lines.append(String("a,b,c,d,e"))
+    var rows = List[String]()
+    rows.append(String("Alice,30,Warsaw"))
+    rows.append(String('Bob,25,"Krakow, ul. Florianska 12"'))
+    rows.append(String('Carol,28,"She said ""hello"" to us"'))
+    rows.append(String('"Dave","31","Warsaw"'))
+    rows.append(String("Eve,,"))
 
-    for li in range(len(lines)):
-        var line = lines[li]
-        var inp = Input.from_string(line)
-        var r = sep_by[String, UInt8, field, comma](inp)
-        if not r.ok:
-            print("  error: " + r.msg)
-            continue
-        var fields = r.get()
-        print(line + "  →  [" + String(len(fields)) + " fields]")
-        for i in range(len(fields)):
-            print("    [" + String(i) + "] " + fields[i])
+    print("name, age, address/notes")
+    print(String("-") * 50)
+    for i in range(len(rows)):
+        var f = parse_record(rows[i])
+        print(rows[i])
+        for j in range(len(f)):
+            print("  [" + String(j) + "] " + f[j])

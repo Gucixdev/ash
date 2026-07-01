@@ -10,8 +10,9 @@ Parses key = value lines; value is a quoted string, integer, or bare word.
 Skips comment and blank lines.
 """
 from ashparser.input  import Input
-from ashparser.prim   import ident, ws, take_while, digits, byte
+from ashparser.prim   import take_while
 from ashparser.result import ParseResult
+from ashparser.p      import P, PIdent, PWs, PDigits, p_byte
 
 
 @parameter
@@ -38,27 +39,18 @@ def consume_newline(inp: Input) -> Input:
 
 
 def skip_line(inp: Input) -> Input:
-    var r = take_while[_not_newline](inp)
-    return r.rest
+    return P[String, take_while[_not_newline]]()(inp).rest
 
 
-# Parse one value; returns ParseResult[String] with rest pointing past the value.
 def parse_value(inp: Input) -> ParseResult[String]:
-    # quoted string
-    var open = byte[UInt8(34)](inp)
-    if open.ok:
-        var content = take_while[_not_quote](open.rest)
-        var close = byte[UInt8(34)](content.rest)
-        if close.ok:
-            var out = ParseResult[String].success(content.get(), close.rest)
-            return out^
+    # "quoted string"
+    var qr = p_byte[UInt8(34)]().p_then(P[String, take_while[_not_quote]]()).p_skip(p_byte[UInt8(34)]())(inp)
+    if qr.ok: return qr^
     # integer digits
-    var ri = digits(inp)
-    if ri.ok:
-        return ri^
+    var dr = PDigits()(inp)
+    if dr.ok: return dr^
     # bare word (true / false / anything up to end of line)
-    var rw = take_while[_not_newline](inp)
-    return rw^
+    return P[String, take_while[_not_newline]]()(inp)^
 
 
 def main() raises:
@@ -75,8 +67,7 @@ def main() raises:
 
     var inp = Input.from_string(src)
     while not inp.is_empty():
-        var rws = ws(inp)
-        var cur = rws.rest
+        var cur = PWs()(inp).rest
         if cur.is_empty():
             break
         var b = cur.peek()
@@ -85,17 +76,16 @@ def main() raises:
         if b == 35:   # '#'
             inp = consume_newline(skip_line(cur)); continue
 
-        var rk = ident(cur)
+        var rk = PIdent()(cur)
         if not rk.ok:
             inp = consume_newline(skip_line(cur)); continue
 
-        var rws2 = ws(rk.rest)
-        var eq = byte[UInt8(61)](rws2.rest)   # '='
+        # ws? '=' ws?
+        var eq = PWs().p_then(p_byte[UInt8(61)]()).p_skip(PWs())(rk.rest)
         if not eq.ok:
             inp = consume_newline(skip_line(cur)); continue
 
-        var rws3 = ws(eq.rest)
-        var rv = parse_value(rws3.rest)
+        var rv = parse_value(eq.rest)
         if rv.ok:
             print("  " + rk.get() + " = " + rv.get())
             inp = consume_newline(rv.rest)

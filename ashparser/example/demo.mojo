@@ -7,11 +7,10 @@ Demo: ashparser on real-world data.
 """
 from ashparser.input  import Input
 from ashparser.prim   import (
-    take_while, byte, ws, tag, rest_of_line,
-    parse_int, quoted_string, digits, eof, parse_uint,
+    take_while, byte, ws, tag, rest_of_line, digits,
 )
-from ashparser.comb   import sep_by, choice, between
 from ashparser.result import ParseResult
+from ashparser.p      import P
 from std.time import perf_counter_ns
 
 
@@ -21,20 +20,9 @@ from std.time import perf_counter_ns
 def _not_sep(b: UInt8) -> Bool:
     return b != 44 and b != 10 and b != 13  # not ',' '\n' '\r'
 
-@parameter
-def csv_field(inp: Input) -> ParseResult[String]:
-    return take_while[_not_sep](inp)^
-
-@parameter
-def csv_comma(inp: Input) -> ParseResult[UInt8]:
-    return byte[UInt8(44)](inp)^
-
 def csv_parse_line(line: String) -> List[String]:
-    var inp = Input.from_string(line)
-    var r = sep_by[String, UInt8, csv_field, csv_comma](inp)
-    if r.ok:
-        return r.get()
-    return List[String]()
+    var r = P[String, take_while[_not_sep]]().p_sep_by(P[UInt8, byte[UInt8(44)]]()).parse(line)
+    return r.get() if r.ok else List[String]()
 
 
 # ── JSON (flat objects: {"key": value, ...}) ──────────────────────────────────
@@ -137,7 +125,7 @@ def parse_json_object(src: String) -> List[KV]:
     if not open.ok:
         print("  error: expected '{'"); return List[KV]()
     var r2 = ws(open.rest)
-    var pairs = sep_by[KV, UInt8, json_kv, json_comma_ws](r2.rest)
+    var pairs = P[KV, json_kv]().p_sep_by(P[UInt8, json_comma_ws]())(r2.rest)
     if not pairs.ok:
         print("  error: " + pairs.msg); return List[KV]()
     var r3 = ws(pairs.rest)
@@ -245,7 +233,7 @@ def main() raises:
             had_error = True
         if not had_error:
             var r2 = ws(open.rest)
-            var pr = sep_by[KV, UInt8, json_kv, json_comma_ws](r2.rest)
+            var pr = P[KV, json_kv]().p_sep_by(P[UInt8, json_comma_ws]())(r2.rest)
             if not pr.ok:
                 print("  [" + String(i) + "] " + pr.message_ctx(original))
                 had_error = True

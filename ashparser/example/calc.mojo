@@ -6,9 +6,7 @@ ashparser example: evaluate left-to-right integer arithmetic.
 
 Parses: ws? uint (ws op ws uint)* — no precedence, strictly left-to-right.
 """
-from ashparser.input  import Input
-from ashparser.prim   import digits, ws, satisfy
-from ashparser.result import ParseResult
+from ashparser.p import PWs, PDigits, p_satisfy
 
 
 @parameter
@@ -16,54 +14,33 @@ def _is_op(b: UInt8) -> Bool:
     return b == 43 or b == 45 or b == 42 or b == 47   # + - * /
 
 
-@parameter
-def op_p(inp: Input) -> ParseResult[UInt8]:
-    var r = satisfy[_is_op](inp)
-    return r^
-
-
-# Skip optional ws, consume op, skip optional ws; returns the op byte.
-@parameter
-def ws_op_ws(inp: Input) -> ParseResult[UInt8]:
-    var r1 = ws(inp)
-    var r2 = op_p(r1.rest)
-    if not r2.ok:
-        var out = ParseResult[UInt8].failure(inp, r2.msg)
-        return out^
-    var r3 = ws(r2.rest)
-    var out = ParseResult[UInt8].success(r2.get(), r3.rest)
-    return out^
-
-
-def parse_uint(inp: Input) -> ParseResult[Int]:
-    var r = digits(ws(inp).rest)
-    if not r.ok:
-        var out = ParseResult[Int].failure(inp, r.msg)
-        return out^
-    var s = r.get()
+def _digits_to_int(s: String) -> Int:
     var n = 0
     for i in range(s.byte_length()):
         n = n * 10 + Int(s.unsafe_ptr()[i]) - 48
-    var out = ParseResult[Int].success(n, r.rest)
-    return out^
+    return n
 
 
 def eval_expr(src: String) raises -> Int:
-    var inp = Input.from_string(src)
-    var r0 = parse_uint(inp)
+    # ws? digits  →  integer string
+    var uint_p = PWs().p_then(PDigits())
+    # ws op ws  →  operator byte
+    var op_p   = PWs().p_then(p_satisfy[_is_op]()).p_skip(PWs())
+
+    var r0 = uint_p.parse(src)
     if not r0.ok:
         raise Error("expected number: " + r0.msg)
-    var acc = r0.get()
+    var acc = _digits_to_int(r0.get())
     var cur = r0.rest
     while True:
-        var rop = ws_op_ws(cur)
+        var rop = op_p(cur)
         if not rop.ok:
             break
-        var rhs = parse_uint(rop.rest)
+        var rhs = uint_p(rop.rest)
         if not rhs.ok:
             break
         var o = Int(rop.get())
-        var v = rhs.get()
+        var v = _digits_to_int(rhs.get())
         cur = rhs.rest
         if o == 43:
             acc = acc + v
@@ -72,6 +49,8 @@ def eval_expr(src: String) raises -> Int:
         elif o == 42:
             acc = acc * v
         elif o == 47:
+            if v == 0:
+                raise Error("division by zero")
             acc = acc // v
     return acc
 
