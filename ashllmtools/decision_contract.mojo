@@ -70,12 +70,12 @@ def _contains(haystack: String, needle: String) -> Bool:
     var hp = haystack.unsafe_ptr()
     var np = needle.unsafe_ptr()
     for i in range(hl - nl + 1):
-        var match = True
+        var is_match = True
         for j in range(nl):
             if hp[i + j] != np[j]:
-                match = False
+                is_match = False
                 break
-        if match:
+        if is_match:
             return True
     return False
 

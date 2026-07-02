@@ -155,7 +155,7 @@ struct WorkflowEngine(Movable):
             return StepResult(LOOP_BLOCKED, "no unblocked tasks available")
 
         # Step 4: CONTRACT
-        var t   = self.tasks[task_idx]
+        var t   = self.tasks[task_idx].copy()
         var act = Action(
             cmd        = t.skill + ": " + t.desc,
             scope      = "repo",

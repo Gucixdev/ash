@@ -32,6 +32,12 @@ jobs:
       - name: Run tests
         run: ./test run
 
+      - name: Debug crash symbolication (test_debug.mojo)
+        if: failure()
+        run: |
+          pixi run mojo build -I . -debug-level=line-tables tests/test_debug.mojo -o /tmp/test_debug_dbg || true
+          /tmp/test_debug_dbg || true
+
   ashparser:
     runs-on: ubuntu-latest
     timeout-minutes: 30

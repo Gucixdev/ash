@@ -3,7 +3,7 @@
 from std.ffi import external_call
 from std.memory import UnsafePointer
 
-alias _FPTR = UnsafePointer[UInt8]   # opaque FILE*
+alias _FPTR = UnsafePointer[UInt8, MutAnyOrigin]   # opaque FILE*
 
 comptime _BUF: Int = 4096
 

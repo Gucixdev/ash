@@ -118,9 +118,9 @@ struct SemanticChunk(Copyable, Movable, ImplicitlyDeletable):
     var content: String
     var tags:    List[String]   # keyword tags for retrieval
 
-    def __init__(out self, content: String, tags: List[String]):
+    def __init__(out self, content: String, owned tags: List[String]):
         self.content = content
-        self.tags    = tags
+        self.tags    = tags^
 
 
 struct SemanticMemory(Movable):
@@ -137,8 +137,8 @@ struct SemanticMemory(Movable):
     def __moveinit__(out self, owned other: Self):
         self._chunks = other._chunks^
 
-    def store(mut self, content: String, tags: List[String]):
-        self._chunks.append(SemanticChunk(content, tags))
+    def store(mut self, content: String, owned tags: List[String]):
+        self._chunks.append(SemanticChunk(content, tags^))
 
     def retrieve(self, query_tags: List[String], top_k: Int) -> List[SemanticChunk]:
         var scored = List[Int]()  # indices of matching chunks (score = tag overlap)
@@ -154,7 +154,7 @@ struct SemanticMemory(Movable):
         var result = List[SemanticChunk]()
         var limit  = top_k if top_k < len(scored) else len(scored)
         for i in range(limit):
-            result.append(self._chunks[scored[i]])
+            result.append(self._chunks[scored[i]].copy())
         return result^
 
     def size(self) -> Int:
