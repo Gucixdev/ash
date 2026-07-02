@@ -18,7 +18,6 @@ Freshness thresholds:
   web results  → 900 seconds  (15 minutes)
 """
 
-from std.memory import UnsafePointer
 from tools.sys.fs    import read_text, file_exists
 from tools.sys.shell import shell_run
 from context_engine import ContextChunk, AUTH_REPO, AUTH_FETCHED, AUTH_WEB

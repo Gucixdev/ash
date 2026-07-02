@@ -1,4 +1,4 @@
-"""tools.shell — lazytools: shell command execution via popen."""
+"""tools.sys.shell — lazytools: shell command execution via popen."""
 
 from std.ffi import external_call
 from std.memory import UnsafePointer

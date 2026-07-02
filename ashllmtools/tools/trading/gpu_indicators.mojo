@@ -5,7 +5,7 @@ detection over large price series. Falls back to CPU implementations from
 tools.trading.indicators when no GPU is available at runtime.
 
 Usage:
-    from tools.trading.gpu_indicators import gpu_sma, gpu_whalecheck_signal
+    from tools.trading.gpu_indicators import gpu_sma, gpu_whalecheck
 """
 
 from tools.trading.parser     import parse_floats_csv

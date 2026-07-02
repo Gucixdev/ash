@@ -1,8 +1,8 @@
-"""tools.fs — lazytools: filesystem read/write/exist/list/tree/info/scan_log."""
+"""tools.sys.fs — lazytools: filesystem read/write/exist/list/tree/info/scan_log."""
 
 from pathlib import Path
 from std.memory import UnsafePointer
-from tools.shell import shell_run
+from tools.sys.shell import shell_run
 
 
 def file_exists(path: String) -> Bool:

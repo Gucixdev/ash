@@ -19,8 +19,8 @@ Exit conditions:
 """
 
 from decision_contract import Action, GuardResult, evaluate
-from decision_contract import RISK_BLOCK, RISK_HIGH, RISK_LOW
-from decision_contract import risk_name, _contains
+from decision_contract import RISK_BLOCK
+from decision_contract import _contains
 from skills import SkillRegistry
 from skill_types import SkillResult
 from tools.sys.shell import shell_run
