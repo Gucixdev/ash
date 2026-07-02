@@ -64,39 +64,39 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
 
     @always_inline
     def __call__(self, inp: Input) -> ParseResult[Self.T]:
-        return run(inp)^
+        return Self.run(inp)^
 
     @always_inline
     def parse(self, s: String) -> ParseResult[Self.T]:
         """Parse a String directly — creates Input internally."""
-        return run(Input.from_string(s))^
+        return Self.run(Input.from_string(s))^
 
     # ── Repetition ────────────────────────────────────────────────────────────
 
     @always_inline
     def p_many(self) -> P[List[Self.T], many[Self.T, Self.run]]:
         """Zero-or-more; always succeeds."""
-        return P[List[T], many[T, run]]()
+        return P[List[Self.T], many[Self.T, Self.run]]()
 
     @always_inline
     def p_many1(self) -> P[List[Self.T], many1[Self.T, Self.run]]:
         """One-or-more; fails on zero matches."""
-        return P[List[T], many1[T, run]]()
+        return P[List[Self.T], many1[Self.T, Self.run]]()
 
     @always_inline
     def p_skip_many(self) -> P[UInt8, skip_many[Self.T, Self.run]]:
         """Zero-or-more, discarding results; always succeeds."""
-        return P[UInt8, skip_many[T, run]]()
+        return P[UInt8, skip_many[Self.T, Self.run]]()
 
     @always_inline
     def p_skip_many1(self) -> P[UInt8, skip_many1[Self.T, Self.run]]:
         """One-or-more, discarding results; fails on zero matches."""
-        return P[UInt8, skip_many1[T, run]]()
+        return P[UInt8, skip_many1[Self.T, Self.run]]()
 
     @always_inline
     def p_count[N: Int](self) -> P[List[Self.T], count[Self.T, Self.run, N]]:
         """Exactly N repetitions; backtracks on failure."""
-        return P[List[T], count[T, run, N]]()
+        return P[List[Self.T], count[Self.T, Self.run, N]]()
 
     # ── Transformation ────────────────────────────────────────────────────────
 
@@ -104,14 +104,14 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
     def p_map[U: Copyable & Movable & ImplicitlyDeletable,
               f: def(Self.T) capturing -> U](self) -> P[U, map[Self.T, U, Self.run, f]]:
         """Apply f to the parsed value."""
-        return P[U, map[T, U, run, f]]()
+        return P[U, map[Self.T, U, Self.run, f]]()
 
     @always_inline
     def p_verify[pred: def(Self.T) capturing -> Bool](
         self
     ) -> P[Self.T, verify[Self.T, Self.run, pred]]:
         """Fail if pred(value) is False after a successful parse."""
-        return P[T, verify[T, run, pred]]()
+        return P[Self.T, verify[Self.T, Self.run, pred]]()
 
     @always_inline
     def p_flat_map[U: Copyable & Movable & ImplicitlyDeletable,
@@ -119,24 +119,24 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
         self
     ) -> P[U, flat_map[Self.T, U, Self.run, f]]:
         """Dependent sequencing: parse self, then pass (value, rest) to f."""
-        return P[U, flat_map[T, U, run, f]]()
+        return P[U, flat_map[Self.T, U, Self.run, f]]()
 
     @always_inline
     def p_recognize(self) -> P[String, recognize[Self.T, Self.run]]:
         """Return the bytes consumed by self as a String (self's own result is discarded)."""
-        return P[String, recognize[T, run]]()
+        return P[String, recognize[Self.T, Self.run]]()
 
     # ── Control flow ──────────────────────────────────────────────────────────
 
     @always_inline
     def p_attempt(self) -> P[Self.T, attempt[Self.T, Self.run]]:
         """Backtrack to the original position on failure."""
-        return P[T, attempt[T, run]]()
+        return P[Self.T, attempt[Self.T, Self.run]]()
 
     @always_inline
     def p_peek(self) -> P[Self.T, peek[Self.T, Self.run]]:
         """Match without consuming input (non-destructive lookahead)."""
-        return P[T, peek[T, run]]()
+        return P[Self.T, peek[Self.T, Self.run]]()
 
     # ── Sequential composition ────────────────────────────────────────────────
 
@@ -146,7 +146,7 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
         self, other: P[B, q]
     ) -> P[B, skip_left[Self.T, B, Self.run, q]]:
         """Run self then other; return other's result (discard self's)."""
-        return P[B, skip_left[T, B, run, q]]()
+        return P[B, skip_left[Self.T, B, Self.run, q]]()
 
     @always_inline
     def p_skip[B: Copyable & Movable & ImplicitlyDeletable,
@@ -154,7 +154,7 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
         self, other: P[B, q]
     ) -> P[Self.T, skip_right[Self.T, B, Self.run, q]]:
         """Run self then other; return self's result (discard other's)."""
-        return P[T, skip_right[T, B, run, q]]()
+        return P[Self.T, skip_right[Self.T, B, Self.run, q]]()
 
     @always_inline
     def p_between[L: Copyable & Movable & ImplicitlyDeletable,
@@ -164,7 +164,7 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
         self, left: P[L, lp], right: P[R, rp]
     ) -> P[Self.T, between[L, Self.T, R, lp, Self.run, rp]]:
         """Parse left self right; return self's result (discard delimiters)."""
-        return P[T, between[L, T, R, lp, run, rp]]()
+        return P[Self.T, between[L, Self.T, R, lp, Self.run, rp]]()
 
     @always_inline
     def p_sep_by[S: Copyable & Movable & ImplicitlyDeletable,
@@ -172,7 +172,7 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
         self, separator: P[S, sep]
     ) -> P[List[Self.T], sep_by[Self.T, S, Self.run, sep]]:
         """Zero-or-more self separated by separator; always succeeds."""
-        return P[List[T], sep_by[T, S, run, sep]]()
+        return P[List[Self.T], sep_by[Self.T, S, Self.run, sep]]()
 
     @always_inline
     def p_sep_by1[S: Copyable & Movable & ImplicitlyDeletable,
@@ -180,7 +180,7 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
         self, separator: P[S, sep]
     ) -> P[List[Self.T], sep_by1[Self.T, S, Self.run, sep]]:
         """One-or-more self separated by separator; fails on zero matches."""
-        return P[List[T], sep_by1[T, S, run, sep]]()
+        return P[List[Self.T], sep_by1[Self.T, S, Self.run, sep]]()
 
     # ── Choice ────────────────────────────────────────────────────────────────
 
@@ -189,7 +189,7 @@ struct P[T: Copyable & Movable & ImplicitlyDeletable,
         self, other: P[Self.T, q]
     ) -> P[Self.T, choice[Self.T, Self.run, q]]:
         """Try self; on failure try other on the same input."""
-        return P[T, choice[T, run, q]]()
+        return P[Self.T, choice[Self.T, Self.run, q]]()
 
 
 # ── Factory functions ─────────────────────────────────────────────────────────
