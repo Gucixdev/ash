@@ -75,11 +75,6 @@ def close_paren(inp: Input) -> ParseResult[UInt8]:
     return r^
 
 @parameter
-def hi_tag(inp: Input) -> ParseResult[String]:
-    var r = tag["hi"](inp)
-    return r^
-
-@parameter
 def digit_as_int(b: UInt8) -> Int:
     return Int(b) - 48
 
