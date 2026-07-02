@@ -70,7 +70,8 @@ jobs:
         uses: prefix-dev/setup-pixi@v0.8.1
         with:
           manifest-path: ashllmtools/pixi.toml
-          cache: true
+          cache: false
+          locked: false
 
       - name: Run tests
         run: pixi run test

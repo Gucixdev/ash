@@ -65,7 +65,7 @@ struct Arena(Movable):
     alloc() larger than the default slab size) are freed on reset() to prevent
     memory bloat across request / frame cycles.
 
-    Returned pointers carry __origin_of(self): the compiler enforces that the
+    Returned pointers carry origin_of(self): the compiler enforces that the
     Arena outlives any allocation.  reset() / restore() rewind the bump pointer
     logically — existing pointers become dangling but the type system cannot
     detect that (inherent arena limitation).
@@ -93,7 +93,7 @@ struct Arena(Movable):
         self._ptrs.append(addr)
         self._sizes.append(self._rgn_sz)
 
-    def __del__(owned self):
+    def __del__(self):
         for i in range(len(self._ptrs)):
             _slab_del(self._ptrs[i])
 
@@ -111,7 +111,7 @@ struct Arena(Movable):
         mut self,
         size:      Int,
         alignment: Int = CACHE_LINE,
-    ) -> UnsafePointer[UInt8, __origin_of(self)]:
+    ) -> UnsafePointer[UInt8, origin_of(self)]:
         """
         Bump-allocate `size` aligned bytes.  Never raises; grows into a new
         slab when the current one is full.
@@ -142,13 +142,13 @@ struct Arena(Movable):
         if total > self._peak:
             self._peak = total
 
-        return UnsafePointer[UInt8, __origin_of(self)](unsafe_from_address=addr)
+        return UnsafePointer[UInt8, origin_of(self)](unsafe_from_address=addr)
 
     def alloc_zeroed(
         mut self,
         size:      Int,
         alignment: Int = CACHE_LINE,
-    ) -> UnsafePointer[UInt8, __origin_of(self)]:
+    ) -> UnsafePointer[UInt8, origin_of(self)]:
         """alloc() then zero the bytes."""
         var ptr = self.alloc(size, alignment)
         memset_zero(ptr, size)
@@ -156,14 +156,14 @@ struct Arena(Movable):
 
     def alloc_simd[dtype: DType, width: Int](
         mut self,
-    ) -> UnsafePointer[Scalar[dtype], __origin_of(self)]:
+    ) -> UnsafePointer[Scalar[dtype], origin_of(self)]:
         """
         Allocate CACHE_LINE-aligned storage for SIMD[dtype, width].
         Returns UnsafePointer[Scalar[dtype]] ready for SIMD.load() / .store().
         """
         var n_bytes = width * dtype.sizeof()
         var raw = self.alloc(n_bytes, CACHE_LINE)
-        return UnsafePointer[Scalar[dtype], __origin_of(self)](
+        return UnsafePointer[Scalar[dtype], origin_of(self)](
             unsafe_from_address=Int(raw)
         )
 
@@ -171,7 +171,7 @@ struct Arena(Movable):
         mut self,
         s:         String,
         alignment: Int = 1,
-    ) -> UnsafePointer[UInt8, __origin_of(self)]:
+    ) -> UnsafePointer[UInt8, origin_of(self)]:
         """Copy string bytes (null-terminated) into the arena."""
         var n   = s.byte_length() + 1
         var dst = self.alloc(n, alignment)
