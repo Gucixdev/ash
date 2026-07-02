@@ -28,10 +28,17 @@ def _align_up(offset: Int, alignment: Int) -> Int:
 
 @always_inline
 def _slab_new(n: Int) -> Int:
-    """Allocate n bytes; returns raw address (Int).  Panics on OOM in debug."""
-    var ptr = external_call["malloc", UnsafePointer[UInt8, MutAnyOrigin]](n)
+    """Allocate n bytes, CACHE_LINE-aligned; returns raw address (Int).
+
+    n must already be a multiple of CACHE_LINE (aligned_alloc's contract) -
+    callers round via _align_up(n, CACHE_LINE) before calling this. Plain
+    malloc() only guarantees ~16-byte alignment, which silently breaks
+    every CACHE_LINE-aligned offset alloc_simd/alloc compute relative to
+    the slab base.
+    """
+    var ptr = external_call["aligned_alloc", UnsafePointer[UInt8, MutAnyOrigin]](CACHE_LINE, n)
     if DEBUG:
-        dbg_assert(Int(ptr) != 0, "Arena._slab_new: malloc returned null")
+        dbg_assert(Int(ptr) != 0, "Arena._slab_new: aligned_alloc returned null")
     return Int(ptr)
 
 @always_inline
@@ -86,7 +93,7 @@ struct Arena(Movable):
     var _rgn_sz: Int          # target slab size; oversized slabs freed on reset()
 
     def __init__(out self, region_size: Int = REGION_DEFAULT):
-        self._rgn_sz = region_size if region_size > 0 else REGION_DEFAULT
+        self._rgn_sz = _align_up(region_size if region_size > 0 else REGION_DEFAULT, CACHE_LINE)
         self._region = 0
         self._pos    = 0
         self._peak   = 0
@@ -300,7 +307,7 @@ struct Arena(Movable):
         # No suitable slab — allocate a fresh one.
         # If min_size > _rgn_sz the slab is "oversized" and will be freed on
         # the next reset() call to prevent long-lived memory bloat.
-        var sz   = self._rgn_sz if self._rgn_sz >= min_size else min_size
+        var sz   = self._rgn_sz if self._rgn_sz >= min_size else _align_up(min_size, CACHE_LINE)
         var addr = _slab_new(sz)
         self._ptrs.append(addr)
         self._sizes.append(sz)
