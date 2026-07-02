@@ -73,5 +73,18 @@ jobs:
           cache: false
           locked: false
 
+      - name: Debug module resolution
+        run: |
+          echo "--- shell pwd/ls ---"
+          pwd
+          ls -la
+          ls -la tools
+          echo "--- pixi run pwd/ls (does pixi change cwd?) ---"
+          pixi run bash -c 'pwd && ls -la' || true
+          echo "--- mojo run -I \$(pwd) (absolute path instead of .) ---"
+          pixi run mojo run -I "$(pwd)" test_llmtools.mojo 2>&1 | head -20 || true
+          echo "--- mojo --version ---"
+          pixi run mojo --version || true
+
       - name: Run tests
         run: pixi run test
