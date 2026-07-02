@@ -42,7 +42,7 @@ struct SourceMap(Movable, ImplicitlyDeletable):
         return LineCol(lo + 1, pos - self._offsets[lo] + 1)
 
 
-struct LineCol(Copyable, ImplicitlyCopyable, Movable, ImplicitlyDeletable):
+struct LineCol(Copyable, ImplicitlyCopyable, Movable, ImplicitlyDeletable, Stringable):
     """1-based line and column numbers."""
     var line: Int
     var col:  Int

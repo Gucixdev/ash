@@ -83,9 +83,9 @@ def test_decision_contract(mut c: Counter):
     ok(c, gb.risk == RISK_BLOCK, "push to main is BLOCK")
 
     # rm -rf without auth → BLOCK (G4)
-    var c = Action(cmd="rm -rf /tmp/x", scope="local",
+    var rm_noauth = Action(cmd="rm -rf /tmp/x", scope="local",
                    reversible=False, authorized=False)
-    var gc = evaluate(c)
+    var gc = evaluate(rm_noauth)
     ok(c, gc.risk == RISK_BLOCK, "rm -rf without auth is BLOCK")
 
     # rm -rf with explicit auth → HIGH (irreversible, authorized)
@@ -811,7 +811,7 @@ def test_dsl(mut c: Counter):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def main():
+def main() raises:
     var c = Counter()
     test_decision_contract(c)
     test_agent_state(c)

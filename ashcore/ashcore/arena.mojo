@@ -28,7 +28,7 @@ def _align_up(offset: Int, alignment: Int) -> Int:
 @always_inline
 def _slab_new(n: Int) -> Int:
     """Allocate n bytes; returns raw address (Int).  Panics on OOM in debug."""
-    var ptr = UnsafePointer[UInt8].alloc(n)
+    var ptr = UnsafePointer[UInt8, MutableAnyOrigin].alloc(n)
     if DEBUG:
         dbg_assert(Int(ptr) != 0, "Arena._slab_new: malloc returned null")
     return Int(ptr)
@@ -37,7 +37,7 @@ def _slab_new(n: Int) -> Int:
 def _slab_del(addr: Int):
     """Free a slab by raw address."""
     if addr != 0:
-        UnsafePointer[UInt8](unsafe_from_address=addr).free()
+        UnsafePointer[UInt8, MutableAnyOrigin](unsafe_from_address=addr).free()
 
 
 # ── ArenaCheckpoint ───────────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ struct Arena(Movable):
         Allocate CACHE_LINE-aligned storage for SIMD[dtype, width].
         Returns UnsafePointer[Scalar[dtype]] ready for SIMD.load() / .store().
         """
-        var n_bytes = width * dtype.sizeof()
+        var n_bytes = width * sizeof[Scalar[dtype]]()
         var raw = self.alloc(n_bytes, CACHE_LINE)
         return UnsafePointer[Scalar[dtype], origin_of(self)](
             unsafe_from_address=Int(raw)
@@ -220,11 +220,11 @@ struct Arena(Movable):
         """Rewind and zero previously used bytes (prevents data leakage)."""
         for i in range(self._region):
             memset_zero(
-                UnsafePointer[UInt8](unsafe_from_address=self._ptrs[i]),
+                UnsafePointer[UInt8, MutableAnyOrigin](unsafe_from_address=self._ptrs[i]),
                 self._sizes[i],
             )
         memset_zero(
-            UnsafePointer[UInt8](unsafe_from_address=self._ptrs[self._region]),
+            UnsafePointer[UInt8, MutableAnyOrigin](unsafe_from_address=self._ptrs[self._region]),
             self._pos,
         )
         self.reset()

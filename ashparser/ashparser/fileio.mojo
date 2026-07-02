@@ -117,7 +117,7 @@ struct StreamingInput(Movable, ImplicitlyDeletable):
         var fd = external_call["open", Int32](path.unsafe_ptr(), Int32(0x80000))
         if fd < 0:
             raise Error("StreamingInput: cannot open '" + path + "'")
-        var buf = UnsafePointer[UInt8].alloc(chunk_size)
+        var buf = UnsafePointer[UInt8, MutableAnyOrigin].alloc(chunk_size)
         var s   = StreamingInput(fd, buf, chunk_size)
         s._fill()
         return s^
