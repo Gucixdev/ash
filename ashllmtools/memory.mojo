@@ -99,14 +99,14 @@ struct EpisodicMemory(Movable):
             start = 0
         for i in range(start, len(self._episodes)):
             result.append(self._episodes[i])
-        return result
+        return result^
 
     def since_turn(self, t: Int) -> List[Episode]:
         var result = List[Episode]()
         for i in range(len(self._episodes)):
             if self._episodes[i].turn >= t:
                 result.append(self._episodes[i])
-        return result
+        return result^
 
     def size(self) -> Int:
         return len(self._episodes)
@@ -114,7 +114,7 @@ struct EpisodicMemory(Movable):
 
 # ── SemanticMemory ────────────────────────────────────────────────────────────
 
-struct SemanticChunk(Copyable, ImplicitlyCopyable, Movable, ImplicitlyDeletable):
+struct SemanticChunk(Copyable, Movable, ImplicitlyDeletable):
     var content: String
     var tags:    List[String]   # keyword tags for retrieval
 
@@ -155,7 +155,7 @@ struct SemanticMemory(Movable):
         var limit  = top_k if top_k < len(scored) else len(scored)
         for i in range(limit):
             result.append(self._chunks[scored[i]])
-        return result
+        return result^
 
     def size(self) -> Int:
         return len(self._chunks)
@@ -192,7 +192,7 @@ struct LongTermMemory(Movable):
             var k = keys[i]
             var v = self.notes.get(k)
             out = out + k + "=" + v + "\n"
-        return out
+        return out^
 
     def describe(self) -> String:
         return (

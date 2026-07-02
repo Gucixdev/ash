@@ -81,5 +81,5 @@ def fetch_close_csv(symbol: String, days: Int = 60) -> String:
                 if bp[k] != 32 and bp[k] != 10 and bp[k] != 13:
                     csv += String(body[byte=k : k + 1])
                 k += 1
-            return csv
+            return csv^
     return "error: could not parse close prices for " + symbol

@@ -47,7 +47,7 @@ def ts_name(s: Int) -> String:
 
 # ── Task ──────────────────────────────────────────────────────────────────────
 
-struct Task(Copyable, ImplicitlyCopyable, Movable, ImplicitlyDeletable):
+struct Task(Copyable, Movable, ImplicitlyDeletable):
     """
     A single unit of work within a workflow.
     deps: list of task IDs that must be DONE before this task can start.
@@ -289,4 +289,4 @@ def list_workflows() -> List[String]:
                     dot = pn - 3  # strip '.md'
                 if slash < dot: names.append(String(path[byte=slash:dot]))
             ls = i + 1
-    return names
+    return names^

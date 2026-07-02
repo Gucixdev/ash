@@ -163,14 +163,14 @@ struct DSLFact(Copyable, ImplicitlyCopyable, Movable, ImplicitlyDeletable):
         var out = self.lhs + " " + self.op + " " + self.rhs
         if self.ctx != "":
             out += " (" + self.ctx + ")"
-        return out
+        return out^
 
     def describe(self) -> String:
         var out = "DSLFact(lhs=" + self.lhs + " op=" + self.op + " rhs=" + self.rhs
         if self.ctx != "":
             out += " ctx=" + self.ctx
         out += ")"
-        return out
+        return out^
 
 
 # ── Parser ────────────────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ def parse_facts(text: String) -> List[DSLFact]:
         if r_le.ok: inp = r_le.rest
         if line.byte_length() == 0 or line.unsafe_ptr()[0] == 35: continue
         out.append(parse_fact(line))
-    return out
+    return out^
 
 
 # ── DSLStore ──────────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ struct DSLStore(Movable):
         for i in range(len(self._facts)):
             if self._facts[i].lhs == lhs:
                 out.append(self._facts[i])
-        return out
+        return out^
 
     def query_op(self, op: String) -> List[DSLFact]:
         """All facts that use the given operator."""
@@ -304,7 +304,7 @@ struct DSLStore(Movable):
         for i in range(len(self._facts)):
             if self._facts[i].op == op:
                 out.append(self._facts[i])
-        return out
+        return out^
 
     def query_rhs(self, rhs: String) -> List[DSLFact]:
         """All facts whose rhs matches."""
@@ -312,7 +312,7 @@ struct DSLStore(Movable):
         for i in range(len(self._facts)):
             if self._facts[i].rhs == rhs:
                 out.append(self._facts[i])
-        return out
+        return out^
 
     def get(self, lhs: String, op: String) -> String:
         """rhs of the first fact matching lhs+op, or '' if not found."""
@@ -352,4 +352,4 @@ struct DSLStore(Movable):
         for i in range(len(self._facts)):
             if self._facts[i].ok:
                 out += self._facts[i].to_string() + "\n"
-        return out
+        return out^

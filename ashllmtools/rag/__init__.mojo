@@ -173,7 +173,7 @@ struct RAGPipeline(Movable):
         for i in range(limit):
             var compressed = self._compress(ranked[i])
             result.append(compressed.to_chunk())
-        return result
+        return result^
 
     def size(self) -> Int:
         return len(self._docs)

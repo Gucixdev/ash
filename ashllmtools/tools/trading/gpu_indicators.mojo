@@ -39,7 +39,7 @@ def gpu_sma_csv(prices_csv: String, period: Int) -> String:
     for i in range(len(vals)):
         if i > 0: out += ","
         out += _f2s(vals[i])
-    return out
+    return out^
 
 
 # ── GPU whalecheck ────────────────────────────────────────────────────────────
@@ -106,4 +106,4 @@ def gpu_whalecheck(prices: List[Float64]) -> String:
         out += "\nalert: " + String(whale_bars) + " whale move(s) detected (>2.5σ)"
     else:
         out += "\nno whale activity detected"
-    return out
+    return out^
