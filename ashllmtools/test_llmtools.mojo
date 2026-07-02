@@ -21,7 +21,7 @@ from context_engine import (
     PRI_CRITICAL, PRI_HIGH, PRI_MEDIUM, PRI_LOW,
     AUTH_REPO, AUTH_SESSION, AUTH_FETCHED, AUTH_WEB,
 )
-from rag import Document, RAGPipeline, FRESH_FETCHED
+from rag import Document, RAGPipeline, FRESH_FETCHED, FRESH_REPO
 from workflow import WorkflowEngine, LOOP_DONE, LOOP_BLOCKED, TS_DONE
 from skills import SkillRegistry
 from skill_types import SkillResult

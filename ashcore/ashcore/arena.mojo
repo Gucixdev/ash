@@ -12,6 +12,7 @@ Thread-safety: none.  Use one Arena per thread or pair with SharedArena.
 """
 
 from std.memory import UnsafePointer, memset_zero, memcpy
+from std.ffi import external_call
 from ashcore.debug import DEBUG, dbg_positive, dbg_power_of_two, dbg_assert
 
 comptime CACHE_LINE:     Int = 64               # AVX-512 / cache-line alignment
@@ -28,7 +29,7 @@ def _align_up(offset: Int, alignment: Int) -> Int:
 @always_inline
 def _slab_new(n: Int) -> Int:
     """Allocate n bytes; returns raw address (Int).  Panics on OOM in debug."""
-    var ptr = UnsafePointer[UInt8, MutAnyOrigin].alloc(n)
+    var ptr = external_call["malloc", UnsafePointer[UInt8, MutAnyOrigin]](n)
     if DEBUG:
         dbg_assert(Int(ptr) != 0, "Arena._slab_new: malloc returned null")
     return Int(ptr)
@@ -161,7 +162,16 @@ struct Arena(Movable):
         Allocate CACHE_LINE-aligned storage for SIMD[dtype, width].
         Returns UnsafePointer[Scalar[dtype]] ready for SIMD.load() / .store().
         """
-        var n_bytes = width * (dtype.bitwidth() // 8)
+        var elem_bytes: Int
+        if dtype == DType.float64 or dtype == DType.int64 or dtype == DType.uint64:
+            elem_bytes = 8
+        elif dtype == DType.float32 or dtype == DType.int32 or dtype == DType.uint32:
+            elem_bytes = 4
+        elif dtype == DType.bfloat16 or dtype == DType.float16 or dtype == DType.int16 or dtype == DType.uint16:
+            elem_bytes = 2
+        else:
+            elem_bytes = 1
+        var n_bytes = width * elem_bytes
         var raw = self.alloc(n_bytes, CACHE_LINE)
         return UnsafePointer[Scalar[dtype], origin_of(self)](
             unsafe_from_address=Int(raw)
