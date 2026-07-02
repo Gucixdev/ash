@@ -15,13 +15,12 @@ GPU path uses Mojo's DeviceContext (stable since MAX 26.x / Mojo 1.0.0b2):
 
 NOTE: gpu_parallel_for stays CPU-only by design. GPU kernels require fixed,
 concrete function signatures and cannot capture arbitrary closures. Use the
-typed GPU operations (gpu_map_f64, gpu_reduce_f64) for GPU-accelerated work.
+typed GPU operations (gpu_map_f64, gpu_abs_diffs) for GPU-accelerated work.
 """
 
 from std.atomic    import Atomic
 from std.algorithm import parallelize
 from std.sys       import num_physical_cores
-from ashcore.debug import DEBUG, dbg_assert
 from memory        import UnsafePointer
 
 
@@ -52,7 +51,7 @@ def gpu_parallel_for[body: def(Int) capturing -> None](n: Int):
 
     GPU path intentionally omitted: GPU kernels require fixed concrete
     signatures and cannot capture arbitrary closures. Use gpu_map_f64 or
-    gpu_reduce_f64 for GPU-accelerated bulk Float64 operations.
+    gpu_abs_diffs for GPU-accelerated bulk Float64 operations.
     """
     _cpu_parallel_for[body](n)
 
